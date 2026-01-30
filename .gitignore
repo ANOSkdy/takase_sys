@@ -1,0 +1,21 @@
+﻿# dependencies
+node_modules/
+
+# next (future)
+.next/
+out/
+
+# vercel
+.vercel/
+
+# logs
+*.log
+
+# env (never commit)
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
