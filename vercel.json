@@ -1,0 +1,3 @@
+﻿{
+  "buildCommand": "pnpm vercel-build"
+}
