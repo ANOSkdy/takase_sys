@@ -2,6 +2,7 @@
   "name": "takase_sys",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,7 +16,8 @@
     "db:generate": "node scripts/db/verify-schema.mjs",
     "db:migrate": "node scripts/db/verify-schema.mjs",
     "db:deploy": "node scripts/db/verify-schema.mjs",
-    "db:verify": "node scripts/db/verify-schema.mjs"
+    "db:verify": "node scripts/db/verify-schema.mjs",
+    "vercel-build": "node scripts/vercel-build.mjs"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",
