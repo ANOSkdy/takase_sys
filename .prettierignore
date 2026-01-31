@@ -1,0 +1,7 @@
+﻿.next
+node_modules
+pnpm-lock.yaml
+out
+.vercel
+.github/workflows/*.yml
+.github/workflows/*.yaml
