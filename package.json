@@ -11,10 +11,16 @@
     "format": "prettier . --check",
     "format:fix": "prettier . --write",
     "test": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "db:generate": "node scripts/db/verify-schema.mjs",
+    "db:migrate": "node scripts/db/verify-schema.mjs",
+    "db:deploy": "node scripts/db/verify-schema.mjs",
+    "db:verify": "node scripts/db/verify-schema.mjs"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.1",
     "next": "16.1.6",
+    "postgres": "^3.4.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "zod": "^4.3.6"
