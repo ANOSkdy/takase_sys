@@ -27,10 +27,7 @@ export default async function RecordsPage({
   return (
     <main style={{ padding: "var(--space-6)" }}>
       <header style={{ marginBottom: "var(--space-4)" }}>
-        <h1 style={{ margin: 0 }}>レコード検索</h1>
-        <p style={{ color: "var(--muted)", marginTop: "var(--space-2)" }}>
-          品名/規格/価格/ベンダー/最終更新日/カテゴリで絞り込み、フリーワードであいまい検索できます。
-        </p>
+        <h1 style={{ margin: 0 }}>仕切り表</h1>
       </header>
 
       <RecordsSearchClient result={result} />
