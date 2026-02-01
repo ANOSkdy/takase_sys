@@ -1,5 +1,5 @@
-﻿import { recordSearchSchema, searchRecords } from "@/services/records/search";
-import RecordsSearchClient from "./records-client";
+﻿import RecordsSearchClient from "./records-client";
+import { recordSearchSchema, searchRecords } from "@/services/records/search";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,10 +9,10 @@ type SearchParams = Record<string, string | string[] | undefined>;
 export default async function RecordsPage({
   searchParams,
 }: {
-  searchParams?: SearchParams | Promise<SearchParams>;
+  // Next.js 16 の PageProps 互換：searchParams は Promise 扱い
+  searchParams?: Promise<SearchParams>;
 }) {
-  // Next.js 16 では searchParams が Promise の場合があるため unwrap する
-  const sp = await Promise.resolve(searchParams ?? {});
+  const sp = await (searchParams ?? Promise.resolve({} as SearchParams));
 
   const normalized: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(sp)) {

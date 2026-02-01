@@ -5,10 +5,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function problem(status: number, title: string, detail: string, extra?: unknown) {
-  return new NextResponse(
-    JSON.stringify({ title, detail, status, ...(extra ? { extra } : {}) }),
-    { status, headers: { "content-type": "application/problem+json; charset=utf-8" } }
-  );
+  return new NextResponse(JSON.stringify({ title, detail, status, ...(extra ? { extra } : {}) }), {
+    status,
+    headers: { "content-type": "application/problem+json; charset=utf-8" },
+  });
 }
 
 export async function GET(req: Request) {
@@ -22,8 +22,7 @@ export async function GET(req: Request) {
 
     const data = await searchRecords(parsed.data);
     return NextResponse.json(data);
-  } catch (e: any) {
+  } catch {
     return problem(500, "Internal Server Error", "Failed to search records");
   }
 }
-

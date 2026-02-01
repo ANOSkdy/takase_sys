@@ -62,6 +62,19 @@ export type RecordSearchResult = {
   pageSize: number;
 };
 
+type SqlParam = string | number | boolean | null;
+
+type DbRow = {
+  productId: string;
+  productName: string;
+  spec: string | null;
+  category: string | null;
+  vendorName: string;
+  unitPrice: string | number;
+  lastUpdatedOn: string | Date | null;
+  totalCount: string | number;
+};
+
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (m) => `\\${m}`);
 }
@@ -79,8 +92,9 @@ function tokenizeFreeword(q: string): string[] {
 
 export async function searchRecords(params: RecordSearchParams): Promise<RecordSearchResult> {
   const where: string[] = [];
-  const values: any[] = [];
-  const add = (sqlFragmentWithDollar: string, value: any) => {
+  const values: SqlParam[] = [];
+
+  const add = (sqlFragmentWithDollar: string, value: SqlParam) => {
     values.push(value);
     const ph = `$${values.length}`;
     where.push(sqlFragmentWithDollar.replace("$$", ph));
@@ -89,13 +103,18 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
   if (params.name) add(`pm.product_name ILIKE $$ ESCAPE '\\'`, likePattern(params.name));
   if (params.spec) add(`COALESCE(pm.spec,'') ILIKE $$ ESCAPE '\\'`, likePattern(params.spec));
   if (params.vendor) add(`vp.vendor_name ILIKE $$ ESCAPE '\\'`, likePattern(params.vendor));
-  if (params.category) add(`COALESCE(pm.category,'') ILIKE $$ ESCAPE '\\'`, likePattern(params.category));
+  if (params.category)
+    add(`COALESCE(pm.category,'') ILIKE $$ ESCAPE '\\'`, likePattern(params.category));
 
   if (params.priceMin != null) add(`vp.unit_price >= $$`, params.priceMin);
   if (params.priceMax != null) add(`vp.unit_price <= $$`, params.priceMax);
 
-  if (params.updatedFrom) add(`COALESCE(vp.price_updated_on, vp.updated_at::date) >= $$::date`, params.updatedFrom);
-  if (params.updatedTo) add(`COALESCE(vp.price_updated_on, vp.updated_at::date) <= $$::date`, params.updatedTo);
+  if (params.updatedFrom) {
+    add(`COALESCE(vp.price_updated_on, vp.updated_at::date) >= $$::date`, params.updatedFrom);
+  }
+  if (params.updatedTo) {
+    add(`COALESCE(vp.price_updated_on, vp.updated_at::date) <= $$::date`, params.updatedTo);
+  }
 
   if (params.q) {
     const tokens = tokenizeFreeword(params.q);
@@ -108,7 +127,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
           OR COALESCE(pm.spec,'') ILIKE ${ph} ESCAPE '\\'
           OR vp.vendor_name ILIKE ${ph} ESCAPE '\\'
           OR COALESCE(pm.category,'') ILIKE ${ph} ESCAPE '\\'
-        )`
+        )`,
       );
     }
   }
@@ -144,11 +163,11 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     OFFSET ${offsetPh}
   `;
 
-  const { rows } = await pool.query(sql, values);
+  const { rows } = await pool.query<DbRow>(sql, values);
 
   const total = rows.length ? Number(rows[0].totalCount) : 0;
 
-  const items: RecordRow[] = rows.map((r: any) => ({
+  const items: RecordRow[] = rows.map((r) => ({
     productId: r.productId,
     productName: r.productName,
     spec: r.spec ?? null,

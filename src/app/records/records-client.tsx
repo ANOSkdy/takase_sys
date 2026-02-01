@@ -45,6 +45,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   });
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm({
       q: sp.get("q") ?? "",
       name: sp.get("name") ?? "",
@@ -116,8 +117,16 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
       <div style={grid2}>
         <Field label="品名" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
         <Field label="規格" value={form.spec} onChange={(v) => setForm({ ...form, spec: v })} />
-        <Field label="ベンダー" value={form.vendor} onChange={(v) => setForm({ ...form, vendor: v })} />
-        <Field label="カテゴリ" value={form.category} onChange={(v) => setForm({ ...form, category: v })} />
+        <Field
+          label="ベンダー"
+          value={form.vendor}
+          onChange={(v) => setForm({ ...form, vendor: v })}
+        />
+        <Field
+          label="カテゴリ"
+          value={form.category}
+          onChange={(v) => setForm({ ...form, category: v })}
+        />
       </div>
 
       <div style={grid2}>
@@ -164,12 +173,21 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "space-between", alignItems: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "var(--space-2)",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
           <span style={{ fontSize: 12, color: "var(--muted)" }}>表示件数</span>
           <select
             value={String(pageSize)}
-            onChange={(e) => router.push(`/records?${withParam(sp, { page: "1", pageSize: e.target.value })}`)}
+            onChange={(e) =>
+              router.push(`/records?${withParam(sp, { page: "1", pageSize: e.target.value })}`)
+            }
             style={{ ...inputStyle, height: 36, padding: "0 10px" }}
           >
             <option value="20">20</option>
@@ -179,8 +197,12 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
         </div>
 
         <div style={{ display: "flex", gap: "var(--space-2)" }}>
-          <button type="button" onClick={clear} style={btnSecondary}>クリア</button>
-          <button type="submit" style={btnPrimary}>検索</button>
+          <button type="button" onClick={clear} style={btnSecondary}>
+            クリア
+          </button>
+          <button type="submit" style={btnPrimary}>
+            検索
+          </button>
         </div>
       </div>
     </form>
@@ -193,15 +215,24 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
       </div>
 
       <div className="filtersMobile" style={{ display: "none" }}>
-        <button style={btnPrimary} onClick={() => setDrawerOpen(true)}>フィルタ</button>
+        <button style={btnPrimary} onClick={() => setDrawerOpen(true)}>
+          フィルタ
+        </button>
       </div>
 
       {drawerOpen && (
-        <div role="dialog" aria-modal="true" style={drawerBackdrop} onClick={() => setDrawerOpen(false)}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={drawerBackdrop}
+          onClick={() => setDrawerOpen(false)}
+        >
           <div style={drawerPanel} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <strong>フィルタ</strong>
-              <button style={btnSecondary} onClick={() => setDrawerOpen(false)}>閉じる</button>
+              <button style={btnSecondary} onClick={() => setDrawerOpen(false)}>
+                閉じる
+              </button>
             </div>
             <div style={{ marginTop: "var(--space-3)" }}>{Filters}</div>
           </div>
@@ -214,11 +245,19 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
         </div>
 
         <div style={{ display: "flex", gap: "var(--space-2)" }}>
-          <button style={btnSecondary} disabled={page <= 1} onClick={() => apply(page - 1)}>前へ</button>
+          <button style={btnSecondary} disabled={page <= 1} onClick={() => apply(page - 1)}>
+            前へ
+          </button>
           <span style={{ alignSelf: "center", color: "var(--muted)" }}>
             {page} / {totalPages}
           </span>
-          <button style={btnSecondary} disabled={page >= totalPages} onClick={() => apply(page + 1)}>次へ</button>
+          <button
+            style={btnSecondary}
+            disabled={page >= totalPages}
+            onClick={() => apply(page + 1)}
+          >
+            次へ
+          </button>
         </div>
       </div>
 
@@ -258,8 +297,12 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
 
       <style jsx>{`
         @media (max-width: 840px) {
-          .filtersDesktop { display: none; }
-          .filtersMobile { display: block !important; }
+          .filtersDesktop {
+            display: none;
+          }
+          .filtersMobile {
+            display: block !important;
+          }
         }
       `}</style>
     </section>
@@ -405,4 +448,3 @@ function Td({
     </td>
   );
 }
-

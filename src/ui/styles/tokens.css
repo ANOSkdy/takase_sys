@@ -1,10 +1,10 @@
 ﻿:root {
-  --color-base: #F9F9F9;
-  --color-primary: #4A90E2;
-  --color-secondary: #50E3C2;
-  --color-accent1: #FFD166;
-  --color-accent2: #F25F5C;
-  --color-accent3: #9D59EC;
+  --color-base: #f9f9f9;
+  --color-primary: #4a90e2;
+  --color-secondary: #50e3c2;
+  --color-accent1: #ffd166;
+  --color-accent2: #f25f5c;
+  --color-accent3: #9d59ec;
 
   --surface: #ffffff;
   --text: #222;
@@ -14,7 +14,7 @@
   --radius-lg: 16px;
   --radius-md: 12px;
 
-  --shadow-soft: 0 10px 30px rgba(0,0,0,0.08);
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.08);
 
   --space-2: 8px;
   --space-3: 12px;
@@ -22,7 +22,8 @@
   --space-6: 24px;
 }
 
-html, body {
+html,
+body {
   background: var(--color-base);
   color: var(--text);
 }

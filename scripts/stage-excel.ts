@@ -10,7 +10,9 @@ function arg(name: string) {
 }
 
 function norm(v: unknown) {
-  return String(v ?? "").replace(/\s+/g, " ").trim();
+  return String(v ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function toText(v: unknown) {
@@ -48,7 +50,9 @@ async function main() {
   const file = arg("--file");
   const importRunId = arg("--import-run-id");
   if (!file || !importRunId) {
-    console.error('Usage: pnpm tsx scripts/stage-excel.ts -- --file ".\\材料仕切り表.xlsx" --import-run-id "<uuid>"');
+    console.error(
+      'Usage: pnpm tsx scripts/stage-excel.ts -- --file ".\\材料仕切り表.xlsx" --import-run-id "<uuid>"',
+    );
     process.exit(1);
   }
 
@@ -65,7 +69,11 @@ async function main() {
     await sql.begin(async (tx) => {
       for (const sheetName of wb.SheetNames) {
         const sheet = wb.Sheets[sheetName];
-        const rows = xlsx.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" }) as unknown[][];
+        const rows = xlsx.utils.sheet_to_json(sheet, {
+          header: 1,
+          raw: true,
+          defval: "",
+        }) as unknown[][];
 
         // 1) 原本行をそのまま投入
         for (let i = 0; i < rows.length; i++) {
