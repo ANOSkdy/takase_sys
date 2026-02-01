@@ -57,6 +57,7 @@ export type RecordRow = {
 
 export type RecordSearchResult = {
   items: RecordRow[];
+  categories: string[];
   total: number;
   page: number;
   pageSize: number;
@@ -163,9 +164,20 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     OFFSET ${offsetPh}
   `;
 
-  const { rows } = await pool.query<DbRow>(sql, values);
+  const [{ rows }, categoryResult] = await Promise.all([
+    pool.query<DbRow>(sql, values),
+    pool.query<{ category: string | null }>(`
+      SELECT DISTINCT pm.category AS category
+      FROM product_master pm
+      WHERE pm.category IS NOT NULL AND pm.category <> ''
+      ORDER BY pm.category ASC
+    `),
+  ]);
 
   const total = rows.length ? Number(rows[0].totalCount) : 0;
+  const categories = categoryResult.rows
+    .map((r) => r.category?.trim() ?? "")
+    .filter(Boolean);
 
   const items: RecordRow[] = rows.map((r) => ({
     productId: r.productId,
@@ -177,5 +189,5 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     lastUpdatedOn: r.lastUpdatedOn ? String(r.lastUpdatedOn).slice(0, 10) : null,
   }));
 
-  return { items, total, page: params.page, pageSize: params.pageSize };
+  return { items, categories, total, page: params.page, pageSize: params.pageSize };
 }
