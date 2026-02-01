@@ -114,6 +114,22 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
         />
       </div>
 
+      <div style={{ display: "grid", gap: "var(--space-2)" }}>
+        <label style={{ fontSize: 12, color: "var(--muted)" }}>カテゴリ</label>
+        <select
+          value={form.category}
+          onChange={(e) => setForm({ ...form, category: e.target.value })}
+          style={{ ...inputStyle, height: 40 }}
+        >
+          <option value="">すべてのカテゴリ</option>
+          {result.categories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div style={grid2}>
         <Field label="品名" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
         <Field label="規格" value={form.spec} onChange={(v) => setForm({ ...form, spec: v })} />
@@ -121,11 +137,6 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
           label="ベンダー"
           value={form.vendor}
           onChange={(v) => setForm({ ...form, vendor: v })}
-        />
-        <Field
-          label="カテゴリ"
-          value={form.category}
-          onChange={(v) => setForm({ ...form, category: v })}
         />
       </div>
 
