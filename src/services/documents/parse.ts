@@ -487,7 +487,8 @@ export async function parseDocument(documentId: string): Promise<ParseOutcome> {
             productName: parsed.productNameRaw,
             spec: parsed.specRaw,
             category: null,
-            defaultUnitPrice: parsed.unitPrice ?? null,
+            defaultUnitPrice:
+              parsed.unitPrice == null ? null : String(parsed.unitPrice),
             qualityFlag: "WARN_NEW_FROM_PDF",
             lastUpdatedAt: new Date(),
             lastSourceType: "PDF",
