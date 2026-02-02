@@ -319,11 +319,24 @@ export async function parseDocument(documentId: string): Promise<ParseOutcome> {
         productNameRaw: item.productNameRaw,
         specRaw: item.specRaw,
         productKeyCandidate: item.productKeyCandidate,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        amount: item.amount,
-        modelConfidence: item.modelConfidence,
-        systemConfidence: item.systemConfidence,
+        quantity:
+          item.quantity == null
+            ? null
+            : (String(item.quantity) as LineItemInsert["quantity"]),
+        unitPrice:
+          item.unitPrice == null
+            ? null
+            : (String(item.unitPrice) as LineItemInsert["unitPrice"]),
+        amount:
+          item.amount == null ? null : (String(item.amount) as LineItemInsert["amount"]),
+        modelConfidence:
+          item.modelConfidence == null
+            ? null
+            : (String(item.modelConfidence) as LineItemInsert["modelConfidence"]),
+        systemConfidence:
+          item.systemConfidence == null
+            ? null
+            : (String(item.systemConfidence) as LineItemInsert["systemConfidence"]),
         matchedProductId: null,
       }));
 
