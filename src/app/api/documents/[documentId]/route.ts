@@ -16,9 +16,9 @@ const paramsSchema = z.object({
 
 export async function GET(
   _req: Request,
-  context: { params: { documentId: string } },
+  context: { params: Promise<{ documentId: string }> },
 ) {
-  const parsedParams = paramsSchema.safeParse(context.params);
+  const parsedParams = paramsSchema.safeParse(await context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid documentId", parsedParams.error.flatten());
   }
@@ -37,9 +37,9 @@ export async function GET(
 
 export async function DELETE(
   req: Request,
-  context: { params: { documentId: string } },
+  context: { params: Promise<{ documentId: string }> },
 ) {
-  const parsedParams = paramsSchema.safeParse(context.params);
+  const parsedParams = paramsSchema.safeParse(await context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid documentId", parsedParams.error.flatten());
   }
