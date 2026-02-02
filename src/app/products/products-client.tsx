@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { ProductSearchResult } from "@/services/products/search";
 
@@ -268,7 +268,7 @@ const cardStyle = {
   background: "var(--surface)",
 };
 
-const tableStyle = {
+const tableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   fontSize: 14,
