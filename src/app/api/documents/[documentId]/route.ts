@@ -14,16 +14,11 @@ const paramsSchema = z.object({
   documentId: z.string().uuid(),
 });
 
-async function parseParams(context: { params: { documentId: string } | Promise<{ documentId: string }> }) {
-  const params = await Promise.resolve(context.params);
-  return paramsSchema.safeParse(params);
-}
-
 export async function GET(
   _req: Request,
-  context: { params: { documentId: string } | Promise<{ documentId: string }> },
+  context: { params: { documentId: string } },
 ) {
-  const parsedParams = await parseParams(context);
+  const parsedParams = paramsSchema.safeParse(context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid documentId", parsedParams.error.flatten());
   }
@@ -42,9 +37,9 @@ export async function GET(
 
 export async function DELETE(
   req: Request,
-  context: { params: { documentId: string } | Promise<{ documentId: string }> },
+  context: { params: { documentId: string } },
 ) {
-  const parsedParams = await parseParams(context);
+  const parsedParams = paramsSchema.safeParse(context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid documentId", parsedParams.error.flatten());
   }
