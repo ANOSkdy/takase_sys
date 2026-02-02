@@ -13,6 +13,7 @@ export const serverEnvSchema = z.object({
 
   // Gemini
   GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_MODEL: z.string().min(1).optional(),
 
   // Storage (provider-agnostic)
   STORAGE_PROVIDER: z.string().min(1),

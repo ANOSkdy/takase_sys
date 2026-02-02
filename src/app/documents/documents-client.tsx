@@ -48,6 +48,7 @@ export default function DocumentsClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
+  const [parseTarget, setParseTarget] = useState<string | null>(null);
 
   const maxBytes = useMemo(() => maxPdfMb * 1024 * 1024, [maxPdfMb]);
 
@@ -197,6 +198,22 @@ export default function DocumentsClient({
     }
   };
 
+  const onParse = async (documentId: string) => {
+    setParseTarget(documentId);
+    try {
+      const res = await fetch(`/api/documents/${documentId}/parse`, { method: "POST" });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "解析に失敗しました。");
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "解析に失敗しました。");
+    } finally {
+      setParseTarget(null);
+    }
+  };
+
   return (
     <section style={{ display: "grid", gap: "var(--space-4)" }}>
       <div style={cardStyle}>
@@ -261,19 +278,40 @@ export default function DocumentsClient({
                   <Td muted>{item.invoiceDate ? formatDate(item.invoiceDate) : "-"}</Td>
                   <Td muted>{item.uploadNote ?? "-"}</Td>
                   <Td>
-                    <button
-                      style={btnDanger}
-                      onClick={() =>
-                        setDeleteState({
-                          target: item,
-                          confirmName: "",
-                          deletedReason: "",
-                          busy: false,
-                        })
-                      }
-                    >
-                      削除
-                    </button>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        style={btnSecondary}
+                        onClick={() => onParse(item.documentId)}
+                        disabled={parseTarget === item.documentId || item.status === "PARSING"}
+                      >
+                        解析
+                      </button>
+                      <a
+                        href={`/documents/${item.documentId}/diff`}
+                        style={{
+                          ...btnSecondary,
+                          textDecoration: "none",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        差分
+                      </a>
+                      <button
+                        style={btnDanger}
+                        onClick={() =>
+                          setDeleteState({
+                            target: item,
+                            confirmName: "",
+                            deletedReason: "",
+                            busy: false,
+                          })
+                        }
+                      >
+                        削除
+                      </button>
+                    </div>
                   </Td>
                 </tr>
               ))}

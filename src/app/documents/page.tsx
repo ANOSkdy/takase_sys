@@ -13,7 +13,7 @@ export default async function DocumentsPage() {
       <header style={{ display: "grid", gap: "var(--space-2)" }}>
         <h1 style={{ margin: 0 }}>納品書PDF</h1>
         <p style={{ margin: 0, color: "var(--muted)" }}>
-          PDFのみアップロードできます。解析はPR2で対応します。
+          PDFのみアップロードできます。アップロード後に解析を実行してください。
         </p>
       </header>
 
