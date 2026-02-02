@@ -136,8 +136,6 @@ export async function registerDocument(
       storageKey: input.storageKey,
       fileHash: input.fileHash,
       uploadNote: input.uploadNote ?? null,
-      status: "UPLOADED",
-      isDeleted: false,
     })
     .returning({ documentId: documents.documentId, status: documents.status });
 

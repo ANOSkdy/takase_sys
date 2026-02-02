@@ -38,17 +38,17 @@ export const vendorPrices = pgTable("vendor_prices", {
 
 // 3) documents
 export const documents = pgTable("documents", {
-  documentId: uuid("document_id").primaryKey(),
+  documentId: uuid("document_id").primaryKey().defaultRandom(),
   fileName: text("file_name").notNull(),
   fileHash: text("file_hash").notNull(),
   storageKey: text("storage_key").notNull(),
-  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull(),
+  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
   uploadNote: text("upload_note"),
-  status: text("status").notNull(),
+  status: text("status").notNull().default("UPLOADED"),
   vendorName: text("vendor_name"),
   invoiceDate: date("invoice_date"),
   parseErrorSummary: text("parse_error_summary"),
-  isDeleted: boolean("is_deleted").notNull(),
+  isDeleted: boolean("is_deleted").notNull().default(false),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   deletedReason: text("deleted_reason"),
 });
