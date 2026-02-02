@@ -42,3 +42,28 @@ export type SoftDeleteResult = {
   documentId: string;
   status: DocumentStatus;
 };
+
+export type DocumentLineItem = {
+  lineItemId: string;
+  lineNo: number;
+  productNameRaw: string | null;
+  specRaw: string | null;
+  productKeyCandidate: string | null;
+  quantity: string | null;
+  unitPrice: string | null;
+  amount: string | null;
+  modelConfidence: string | null;
+  systemConfidence: string | null;
+  matchedProductId: string | null;
+};
+
+export type DocumentDiffItem = {
+  diffItemId: string;
+  lineItemId: string;
+  classification: string;
+  reason: string | null;
+  vendorName: string | null;
+  invoiceDate: string | null;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+};

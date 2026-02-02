@@ -19,6 +19,11 @@ type DeleteState = {
   error?: string;
 };
 
+type ParseState = {
+  targetId: string;
+  busy: boolean;
+};
+
 const jstDateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo",
   year: "numeric",
@@ -48,6 +53,7 @@ export default function DocumentsClient({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
+  const [parseState, setParseState] = useState<ParseState | null>(null);
 
   const maxBytes = useMemo(() => maxPdfMb * 1024 * 1024, [maxPdfMb]);
 
@@ -197,6 +203,22 @@ export default function DocumentsClient({
     }
   };
 
+  const onParse = async (documentId: string) => {
+    setParseState({ targetId: documentId, busy: true });
+    try {
+      const res = await fetch(`/api/documents/${documentId}/parse`, { method: "POST" });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "解析に失敗しました。");
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "解析に失敗しました。");
+    } finally {
+      setParseState(null);
+    }
+  };
+
   return (
     <section style={{ display: "grid", gap: "var(--space-4)" }}>
       <div style={cardStyle}>
@@ -261,19 +283,31 @@ export default function DocumentsClient({
                   <Td muted>{item.invoiceDate ? formatDate(item.invoiceDate) : "-"}</Td>
                   <Td muted>{item.uploadNote ?? "-"}</Td>
                   <Td>
-                    <button
-                      style={btnDanger}
-                      onClick={() =>
-                        setDeleteState({
-                          target: item,
-                          confirmName: "",
-                          deletedReason: "",
-                          busy: false,
-                        })
-                      }
-                    >
-                      削除
-                    </button>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        style={btnPrimary}
+                        onClick={() => onParse(item.documentId)}
+                        disabled={item.status === "PARSING" || parseState?.busy}
+                      >
+                        解析
+                      </button>
+                      <a href={`/documents/${item.documentId}/diff`} style={btnLink}>
+                        差分
+                      </a>
+                      <button
+                        style={btnDanger}
+                        onClick={() =>
+                          setDeleteState({
+                            target: item,
+                            confirmName: "",
+                            deletedReason: "",
+                            busy: false,
+                          })
+                        }
+                      >
+                        削除
+                      </button>
+                    </div>
                   </Td>
                 </tr>
               ))}
@@ -490,6 +524,16 @@ const btnSecondary: CSSProperties = {
   cursor: "pointer",
 };
 
+const btnPrimary: CSSProperties = {
+  height: 36,
+  padding: "0 12px",
+  borderRadius: "var(--radius-md)",
+  border: "1px solid rgba(37,99,235,0.4)",
+  background: "rgba(37,99,235,0.1)",
+  color: "#2563eb",
+  cursor: "pointer",
+};
+
 const btnDanger: CSSProperties = {
   height: 36,
   padding: "0 12px",
@@ -498,6 +542,19 @@ const btnDanger: CSSProperties = {
   background: "rgba(220,38,38,0.1)",
   color: "#dc2626",
   cursor: "pointer",
+};
+
+const btnLink: CSSProperties = {
+  height: 36,
+  padding: "0 12px",
+  borderRadius: "var(--radius-md)",
+  border: "1px solid var(--border)",
+  background: "rgba(0,0,0,0.02)",
+  color: "var(--text)",
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
 };
 
 const tableStyle: CSSProperties = {
