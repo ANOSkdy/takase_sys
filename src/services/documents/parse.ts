@@ -311,7 +311,8 @@ export async function parseDocument(documentId: string): Promise<ParseOutcome> {
           .where(eq(documents.documentId, documentId));
       }
 
-      const lineItemRows = parsedItems.map((item) => ({
+      type LineItemInsert = typeof documentLineItems.$inferInsert;
+      const lineItemRows: LineItemInsert[] = parsedItems.map((item) => ({
         lineItemId: crypto.randomUUID(),
         parseRunId,
         lineNo: item.lineNo,
