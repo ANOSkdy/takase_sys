@@ -1,5 +1,5 @@
 ﻿import Link from "next/link";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { getProductDetail } from "@/services/products/detail";
 
 export const runtime = "nodejs";
@@ -128,7 +128,7 @@ const cardStyle = {
   background: "var(--surface)",
 };
 
-const tableStyle = {
+const tableStyle: CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   fontSize: 14,
