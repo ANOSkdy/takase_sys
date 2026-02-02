@@ -21,7 +21,7 @@ describe("DELETE /api/documents/[documentId]", () => {
     });
 
     const res = await DELETE(req, {
-      params: { documentId: "11111111-1111-1111-8111-111111111111" },
+      params: Promise.resolve({ documentId: "11111111-1111-1111-8111-111111111111" }),
     });
 
     expect(res.status).toBe(200);
