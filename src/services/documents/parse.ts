@@ -269,7 +269,11 @@ export async function parseDocument(documentId: string): Promise<ParseOutcome> {
   });
 
   try {
-    const downloadUrl = await storage.getDownloadUrl(doc.storageKey);
+    const getDownloadUrl = storage.getDownloadUrl;
+    if (!getDownloadUrl) {
+      throw new Error("Storage provider does not support download URLs");
+    }
+    const downloadUrl = await getDownloadUrl(doc.storageKey);
     const headers: Record<string, string> = {};
     if (env.BLOB_READ_WRITE_TOKEN) {
       headers.authorization = `Bearer ${env.BLOB_READ_WRITE_TOKEN}`;
