@@ -11,6 +11,8 @@ export async function POST(req: Request) {
     const body = (await req.json()) as unknown;
     const isRecord = (value: unknown): value is Record<string, unknown> =>
       typeof value === "object" && value !== null && !Array.isArray(value);
+    const isHandleUploadBody = (value: unknown): value is HandleUploadBody =>
+      isRecord(value) && typeof value.pathname === "string";
 
     if (!isRecord(body)) {
       return problemResponse(400, "Bad Request", "Invalid upload payload");
@@ -24,10 +26,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const pathnameValue = typeof body.pathname === "string" ? body.pathname : null;
-    if (!pathnameValue) {
+    if (!isHandleUploadBody(body)) {
       return problemResponse(400, "Bad Request", "Invalid upload payload");
     }
+    const pathnameValue = body.pathname;
     const invalidPath =
       pathnameValue.startsWith("/") ||
       pathnameValue.includes("%") ||
@@ -39,7 +41,7 @@ export async function POST(req: Request) {
     }
 
     const result = await handleUpload({
-      body: body as HandleUploadBody,
+      body,
       request: req,
       onBeforeGenerateToken: async (pathname) => {
         const maxBytes = getMaxPdfSizeBytes();
