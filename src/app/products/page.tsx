@@ -14,9 +14,18 @@ async function getBaseUrl() {
   return host ? `${proto}://${host}` : "";
 }
 
-export default async function ProductsPage() {
+type SearchParams = { keyword?: string };
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  const resolvedSearchParams = await (searchParams ?? Promise.resolve({} as SearchParams));
+  const keyword = resolvedSearchParams.keyword ?? "";
   const baseUrl = await getBaseUrl();
-  const res = await fetch(`${baseUrl}/api/products`, { cache: "no-store" });
+  const query = keyword ? `?keyword=${encodeURIComponent(keyword)}` : "";
+  const res = await fetch(`${baseUrl}/api/products${query}`, { cache: "no-store" });
   const items = res.ok ? ((await res.json()) as ProductsResponse).items : [];
 
   return (
@@ -27,28 +36,40 @@ export default async function ProductsPage() {
       </header>
 
       <section style={cardStyle}>
+        <form method="get" style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <input
+            type="search"
+            name="keyword"
+            placeholder="商品名・商品キーで検索"
+            defaultValue={keyword}
+            style={inputStyle}
+          />
+          <button type="submit" style={buttonStyle}>
+            検索
+          </button>
+        </form>
         <div style={{ overflowX: "auto" }}>
           <table style={tableStyle}>
             <thead>
               <tr>
+                <Th>商品キー</Th>
                 <Th>商品名</Th>
                 <Th>規格</Th>
-                <Th>カテゴリ</Th>
-                <Th>既定単価</Th>
+                <Th>品質</Th>
                 <Th>更新日</Th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.productId}>
+                  <Td muted>{item.productKey}</Td>
                   <Td>
                     <a href={`/products/${item.productId}`} style={linkStyle}>
                       {item.productName}
                     </a>
                   </Td>
                   <Td muted>{item.spec ?? "-"}</Td>
-                  <Td muted>{item.category ?? "-"}</Td>
-                  <Td muted>{item.defaultUnitPrice ?? "-"}</Td>
+                  <Td muted>{item.qualityFlag}</Td>
                   <Td muted>{item.lastUpdatedAt.slice(0, 10)}</Td>
                 </tr>
               ))}
@@ -88,6 +109,21 @@ const tableStyle: CSSProperties = {
 const linkStyle: CSSProperties = {
   color: "var(--text)",
   textDecoration: "underline",
+};
+
+const inputStyle: CSSProperties = {
+  padding: "10px 12px",
+  borderRadius: "var(--radius-md)",
+  border: "1px solid var(--border)",
+  minWidth: 240,
+};
+
+const buttonStyle: CSSProperties = {
+  padding: "10px 16px",
+  borderRadius: "var(--radius-md)",
+  border: "1px solid var(--border)",
+  background: "var(--surface)",
+  cursor: "pointer",
 };
 
 function Th({ children }: { children: ReactNode }) {

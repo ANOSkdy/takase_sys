@@ -11,7 +11,7 @@ const paramsSchema = z.object({
 });
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ documentId: string }> },
 ) {
   const parsedParams = paramsSchema.safeParse(await context.params);
@@ -19,12 +19,26 @@ export async function GET(
     return problemResponse(400, "Bad Request", "Invalid documentId", parsedParams.error.flatten());
   }
 
+  const { searchParams } = new URL(req.url);
+  const parsedQuery = z
+    .object({
+      parseRunId: z.string().uuid().optional(),
+      classification: z.string().min(1).optional(),
+    })
+    .safeParse(Object.fromEntries(searchParams.entries()));
+  if (!parsedQuery.success) {
+    return problemResponse(400, "Bad Request", "Invalid query", parsedQuery.error.flatten());
+  }
+
   try {
     const doc = await getDocumentDetail(parsedParams.data.documentId);
     if (!doc || doc.isDeleted) {
       return problemResponse(404, "Not Found", "Document not found");
     }
-    const items = await listDocumentDiffItems(parsedParams.data.documentId);
+    const items = await listDocumentDiffItems(parsedParams.data.documentId, {
+      parseRunId: parsedQuery.data.parseRunId,
+      classification: parsedQuery.data.classification ?? null,
+    });
     return NextResponse.json({ items });
   } catch (error) {
     console.error("[documents] diff failed", error);
