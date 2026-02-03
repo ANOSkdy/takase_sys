@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ReactNode } from "react";
 import type { DocumentListItem } from "@/services/documents/types";
@@ -112,38 +113,15 @@ export default function DocumentsClient({
         try {
           const fileHash = await hashFile(file);
 
-          const initRes = await fetch("/api/documents/init-upload", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              fileName: file.name,
-              contentType: file.type,
-              size: file.size,
-            }),
+          const now = new Date();
+          const year = now.getUTCFullYear();
+          const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+          const pathname = `documents/${year}/${month}/${crypto.randomUUID()}.pdf`;
+
+          const blob = await upload(pathname, file, {
+            handleUploadUrl: "/api/documents/init-upload",
+            contentType: "application/pdf",
           });
-
-          if (!initRes.ok) {
-            const text = await initRes.text();
-            throw new Error(text || "アップロードの初期化に失敗しました。");
-          }
-
-          const initData = (await initRes.json()) as {
-            uploadUrl: string;
-            storageKey: string;
-          };
-
-          updateUpload({ status: "uploading", message: "PDFアップロード中" });
-
-          const uploadRes = await fetch(initData.uploadUrl, {
-            method: "PUT",
-            headers: { "content-type": "application/pdf" },
-            body: file,
-          });
-
-          if (!uploadRes.ok) {
-            const text = await uploadRes.text();
-            throw new Error(text || "PDFのアップロードに失敗しました。");
-          }
 
           updateUpload({ status: "uploading", message: "登録処理中" });
 
@@ -152,23 +130,24 @@ export default function DocumentsClient({
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               fileName: file.name,
-              storageKey: initData.storageKey,
+              storageKey: blob.pathname,
               fileHash,
               uploadNote: uploadNote.trim() || undefined,
             }),
           });
 
           if (!registerRes.ok) {
-            const text = await registerRes.text();
-            throw new Error(text || "登録に失敗しました。");
+            const detail = await readProblemDetail(registerRes);
+            throw new Error(detail || "登録に失敗しました。");
           }
 
           updateUpload({ status: "done", message: "完了" });
           await refresh();
         } catch (err) {
+          const detail = await readUploadErrorDetail(err);
           updateUpload({
             status: "error",
-            message: err instanceof Error ? err.message : "アップロードに失敗しました。",
+            message: detail ?? (err instanceof Error ? err.message : "アップロードに失敗しました。"),
           });
           setError("アップロードに失敗したファイルがあります。");
         }
@@ -460,6 +439,35 @@ async function hashFile(file: File): Promise<string> {
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function readProblemDetail(response: Response): Promise<string | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/problem+json")) {
+    const data = (await response.json()) as { detail?: string };
+    return data.detail ?? null;
+  }
+  const text = await response.text();
+  return text || null;
+}
+
+function isResponse(value: unknown): value is Response {
+  return value instanceof Response;
+}
+
+async function readUploadErrorDetail(error: unknown): Promise<string | null> {
+  if (!(error instanceof Error)) return null;
+  const cause = "cause" in error ? error.cause : undefined;
+  if (isResponse(cause)) {
+    return readProblemDetail(cause);
+  }
+  if (cause && typeof cause === "object" && "response" in cause) {
+    const maybeResponse = (cause as { response?: unknown }).response;
+    if (isResponse(maybeResponse)) {
+      return readProblemDetail(maybeResponse);
+    }
+  }
+  return error.message || null;
 }
 
 function formatDateTime(iso: string) {

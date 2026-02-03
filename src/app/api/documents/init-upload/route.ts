@@ -1,29 +1,81 @@
 import { NextResponse } from "next/server";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { problemResponse } from "@/app/api/_utils/problem";
-import { initUploadSchema, validateInitUpload } from "@/services/documents/upload";
-import { getStorageProvider } from "@/services/storage";
+import { getMaxPdfSizeBytes } from "@/services/documents/constants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const parsed = initUploadSchema.safeParse(body);
-    if (!parsed.success) {
-      return problemResponse(400, "Bad Request", "Invalid payload", parsed.error.flatten());
+    const body = (await req.json()) as unknown;
+    const isRecord = (value: unknown): value is Record<string, unknown> =>
+      typeof value === "object" && value !== null && !Array.isArray(value);
+
+    if (!isRecord(body)) {
+      return problemResponse(400, "Bad Request", "Invalid upload payload");
     }
 
-    const validation = validateInitUpload(parsed.data);
-    if (!validation.ok) {
-      return problemResponse(validation.status, validation.title, validation.detail);
+    if ("fileName" in body || "contentType" in body || "size" in body) {
+      return problemResponse(
+        400,
+        "Bad Request",
+        "Legacy init-upload payload detected. Update client to use @vercel/blob/client upload() with handleUploadUrl.",
+      );
     }
 
-    const storage = getStorageProvider();
-    const result = await storage.createUploadUrl(parsed.data);
+    const pathnameValue = typeof body.pathname === "string" ? body.pathname : null;
+    if (!pathnameValue) {
+      return problemResponse(400, "Bad Request", "Invalid upload payload");
+    }
+    const invalidPath =
+      pathnameValue.startsWith("/") ||
+      pathnameValue.includes("%") ||
+      pathnameValue.includes("..") ||
+      !pathnameValue.startsWith("documents/") ||
+      !pathnameValue.endsWith(".pdf");
+    if (invalidPath) {
+      return problemResponse(400, "Bad Request", "Invalid upload pathname");
+    }
+
+    const result = await handleUpload({
+      body: body as HandleUploadBody,
+      request: req,
+      onBeforeGenerateToken: async (pathname) => {
+        const maxBytes = getMaxPdfSizeBytes();
+        return {
+          allowedContentTypes: ["application/pdf"],
+          maximumSizeInBytes: maxBytes,
+          tokenPayload: { pathname },
+        };
+      },
+      onUploadCompleted: async ({ blob, contentType, size }) => {
+        console.info("[documents] upload completed", {
+          pathname: blob.pathname,
+          contentType,
+          size,
+        });
+      },
+    });
+
     return NextResponse.json(result);
   } catch (error) {
-    console.error("[documents] init-upload failed", error);
-    return problemResponse(500, "Internal Server Error", "Failed to initialize upload");
+    const errorId = crypto.randomUUID();
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const causeMessage =
+      error && typeof error === "object" && "cause" in error && error.cause instanceof Error
+        ? error.cause.message
+        : undefined;
+    console.error("[documents] init-upload failed", {
+      errorId,
+      name: error instanceof Error ? error.name : "UnknownError",
+      message,
+      cause: causeMessage,
+    });
+    return problemResponse(
+      500,
+      "Internal Server Error",
+      `Failed to initialize upload (errorId=${errorId})`,
+    );
   }
 }
