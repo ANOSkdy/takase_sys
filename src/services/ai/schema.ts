@@ -3,17 +3,18 @@ import { z } from "zod";
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 export const invoiceSchema = z.object({
-  vendor_name: z.string().trim().min(1),
-  invoice_date: z.string().regex(dateRegex).nullable().optional(),
-  line_items: z
+  vendorName: z.string().trim().nullable(),
+  invoiceDate: z.string().regex(dateRegex).nullable(),
+  lineItems: z
     .array(
       z.object({
-        product_name: z.string().trim().min(1),
-        spec: z.string().trim().nullable().optional(),
-        quantity: z.number().nullable().optional(),
-        unit_price: z.number().nullable().optional(),
-        amount: z.number().nullable().optional(),
-        model_confidence: z.number().min(0).max(1).nullable().optional(),
+        lineNo: z.number().int().positive(),
+        productName: z.string().trim().min(1),
+        spec: z.string().trim().nullable(),
+        quantity: z.number().nullable(),
+        unitPrice: z.number().nullable(),
+        amount: z.number().nullable(),
+        confidence: z.number().min(0).max(1).nullable(),
       }),
     )
     .max(500),
@@ -24,23 +25,24 @@ export type ParsedInvoice = z.infer<typeof invoiceSchema>;
 export const invoiceResponseSchema = {
   type: "object",
   properties: {
-    vendor_name: { type: "string" },
-    invoice_date: { type: ["string", "null"], pattern: "\\d{4}-\\d{2}-\\d{2}" },
-    line_items: {
+    vendorName: { type: ["string", "null"] },
+    invoiceDate: { type: ["string", "null"], pattern: "\\d{4}-\\d{2}-\\d{2}" },
+    lineItems: {
       type: "array",
       items: {
         type: "object",
         properties: {
-          product_name: { type: "string" },
+          lineNo: { type: "number" },
+          productName: { type: "string" },
           spec: { type: ["string", "null"] },
           quantity: { type: ["number", "null"] },
-          unit_price: { type: ["number", "null"] },
+          unitPrice: { type: ["number", "null"] },
           amount: { type: ["number", "null"] },
-          model_confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
+          confidence: { type: ["number", "null"], minimum: 0, maximum: 1 },
         },
-        required: ["product_name"],
+        required: ["lineNo", "productName"],
       },
     },
   },
-  required: ["vendor_name", "line_items"],
+  required: ["vendorName", "invoiceDate", "lineItems"],
 } as const;

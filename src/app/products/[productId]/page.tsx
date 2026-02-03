@@ -45,6 +45,8 @@ export default async function ProductDetailPage({
           <dd style={valueStyle}>{product.productKey}</dd>
           <dt style={termStyle}>規格</dt>
           <dd style={valueStyle}>{product.spec ?? "-"}</dd>
+          <dt style={termStyle}>品質フラグ</dt>
+          <dd style={valueStyle}>{product.qualityFlag}</dd>
           <dt style={termStyle}>カテゴリ</dt>
           <dd style={valueStyle}>{product.category ?? "-"}</dd>
           <dt style={termStyle}>既定単価</dt>
@@ -79,6 +81,41 @@ export default async function ProductDetailPage({
                 <tr>
                   <td colSpan={4} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
                     まだ価格情報がありません。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section style={cardStyle}>
+        <h2 style={{ marginTop: 0 }}>更新履歴</h2>
+        <div style={{ overflowX: "auto" }}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <Th>フィールド</Th>
+                <Th>仕入先</Th>
+                <Th>Before</Th>
+                <Th>After</Th>
+                <Th>更新日</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {product.updateHistory.map((row) => (
+                <tr key={row.historyId}>
+                  <Td>{row.fieldName}</Td>
+                  <Td muted>{row.vendorName ?? "-"}</Td>
+                  <Td muted>{row.beforeValue ?? "-"}</Td>
+                  <Td muted>{row.afterValue ?? "-"}</Td>
+                  <Td muted>{row.updatedAt.slice(0, 10)}</Td>
+                </tr>
+              ))}
+              {product.updateHistory.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                    まだ更新履歴がありません。
                   </td>
                 </tr>
               )}

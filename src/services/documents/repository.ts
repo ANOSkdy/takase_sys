@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { documentDiffItems, documentLineItems, documentParseRuns, documents } from "@/db/schema";
 import type {
@@ -181,9 +181,12 @@ async function getLatestParseRunId(documentId: string): Promise<string | null> {
   return row?.parseRunId ?? null;
 }
 
-export async function listDocumentLineItems(documentId: string): Promise<DocumentLineItem[]> {
-  const parseRunId = await getLatestParseRunId(documentId);
-  if (!parseRunId) return [];
+export async function listDocumentLineItems(
+  documentId: string,
+  parseRunId?: string | null,
+): Promise<DocumentLineItem[]> {
+  const resolvedParseRunId = parseRunId ?? (await getLatestParseRunId(documentId));
+  if (!resolvedParseRunId) return [];
   const db = getDb();
   const rows = await db
     .select({
@@ -200,7 +203,7 @@ export async function listDocumentLineItems(documentId: string): Promise<Documen
       matchedProductId: documentLineItems.matchedProductId,
     })
     .from(documentLineItems)
-    .where(eq(documentLineItems.parseRunId, parseRunId))
+    .where(eq(documentLineItems.parseRunId, resolvedParseRunId))
     .orderBy(documentLineItems.lineNo);
 
   return rows.map((row) => ({
@@ -218,10 +221,18 @@ export async function listDocumentLineItems(documentId: string): Promise<Documen
   }));
 }
 
-export async function listDocumentDiffItems(documentId: string): Promise<DocumentDiffItem[]> {
-  const parseRunId = await getLatestParseRunId(documentId);
-  if (!parseRunId) return [];
+export async function listDocumentDiffItems(
+  documentId: string,
+  options?: { parseRunId?: string | null; classification?: string | null },
+): Promise<DocumentDiffItem[]> {
+  const resolvedParseRunId =
+    options?.parseRunId ?? (await getLatestParseRunId(documentId));
+  if (!resolvedParseRunId) return [];
   const db = getDb();
+  const conditions = [eq(documentDiffItems.parseRunId, resolvedParseRunId)];
+  if (options?.classification) {
+    conditions.push(eq(documentDiffItems.classification, options.classification));
+  }
   const rows = await db
     .select({
       diffItemId: documentDiffItems.diffItemId,
@@ -234,7 +245,7 @@ export async function listDocumentDiffItems(documentId: string): Promise<Documen
       after: documentDiffItems.after,
     })
     .from(documentDiffItems)
-    .where(eq(documentDiffItems.parseRunId, parseRunId))
+    .where(and(...conditions))
     .orderBy(documentDiffItems.diffItemId);
 
   return rows.map((row) => ({

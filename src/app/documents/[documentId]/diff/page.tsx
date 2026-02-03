@@ -22,12 +22,18 @@ function formatDate(iso: string | null) {
   return date.toISOString().slice(0, 10);
 }
 
+type SearchParams = { classification?: string };
+
 export default async function DocumentDiffPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ documentId: string }>;
+  searchParams?: Promise<SearchParams>;
 }) {
   const { documentId } = await params;
+  const resolvedSearchParams = await (searchParams ?? Promise.resolve({} as SearchParams));
+  const classificationFilter = resolvedSearchParams.classification ?? "ALL";
   const baseUrl = await getBaseUrl();
 
   const [lineRes, diffRes] = await Promise.all([
@@ -43,6 +49,12 @@ export default async function DocumentDiffPage({
     return acc;
   }, {});
 
+  const tabs = ["ALL", "UPDATE", "BLOCKED", "UNMATCHED", "NO_CHANGE", "NEW_CANDIDATE"];
+  const filteredDiffItems =
+    classificationFilter === "ALL"
+      ? diffItems
+      : diffItems.filter((item) => item.classification === classificationFilter);
+
   return (
     <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
       <header style={{ display: "grid", gap: "var(--space-2)" }}>
@@ -54,6 +66,28 @@ export default async function DocumentDiffPage({
 
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>更新サマリー</h2>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          {tabs.map((tab) => {
+            const count = tab === "ALL" ? diffItems.length : summary[tab] ?? 0;
+            const href =
+              tab === "ALL"
+                ? `/documents/${documentId}/diff`
+                : `/documents/${documentId}/diff?classification=${tab}`;
+            const isActive = classificationFilter === tab;
+            return (
+              <a
+                key={tab}
+                href={href}
+                style={{
+                  ...tabStyle,
+                  background: isActive ? "rgba(0,0,0,0.08)" : "transparent",
+                }}
+              >
+                {tab} ({count})
+              </a>
+            );
+          })}
+        </div>
         <ul style={{ display: "grid", gap: 4, margin: 0, paddingLeft: 16 }}>
           {Object.entries(summary).map(([key, count]) => (
             <li key={key}>
@@ -120,7 +154,7 @@ export default async function DocumentDiffPage({
               </tr>
             </thead>
             <tbody>
-              {diffItems.map((item) => (
+              {filteredDiffItems.map((item) => (
                 <tr key={item.diffItemId}>
                   <Td>{item.classification}</Td>
                   <Td muted>{item.reason ?? "-"}</Td>
@@ -134,7 +168,7 @@ export default async function DocumentDiffPage({
                   </Td>
                 </tr>
               ))}
-              {diffItems.length === 0 && (
+              {filteredDiffItems.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
                     差分はまだありません。
@@ -165,6 +199,15 @@ const tableStyle: CSSProperties = {
   border: "1px solid var(--border)",
   borderRadius: "var(--radius-lg)",
   overflow: "hidden",
+};
+
+const tabStyle: CSSProperties = {
+  padding: "6px 10px",
+  borderRadius: "999px",
+  border: "1px solid var(--border)",
+  color: "inherit",
+  textDecoration: "none",
+  fontSize: 12,
 };
 
 function Th({ children }: { children: ReactNode }) {

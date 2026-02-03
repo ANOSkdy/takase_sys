@@ -51,18 +51,25 @@ export async function parseInvoiceFromPdf(pdfBase64: string): Promise<ParsedInvo
   });
 
   if (!response.ok) {
-    throw new Error(`Gemini API failed: ${response.status}`);
+    throw new Error("GEMINI_API_FAILED");
   }
 
   const data = (await response.json()) as GeminiResponse;
   const text = extractJsonText(data);
   if (!text) {
-    throw new Error("Gemini response missing content");
+    throw new Error("GEMINI_RESPONSE_EMPTY");
   }
 
-  const parsed = invoiceSchema.safeParse(JSON.parse(text));
+  let parsedJson: unknown;
+  try {
+    parsedJson = JSON.parse(text);
+  } catch {
+    throw new Error("GEMINI_RESPONSE_INVALID_JSON");
+  }
+
+  const parsed = invoiceSchema.safeParse(parsedJson);
   if (!parsed.success) {
-    throw new Error("Gemini response validation failed");
+    throw new Error("GEMINI_RESPONSE_INVALID_SCHEMA");
   }
 
   return parsed.data;
