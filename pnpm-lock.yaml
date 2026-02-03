@@ -44,6 +44,9 @@ importers:
       retry:
         specifier: ^0.13.1
         version: 0.13.1
+      throttleit:
+        specifier: ^2.1.0
+        version: 2.1.0
       undici:
         specifier: ^6.21.0
         version: 6.21.0
@@ -122,6 +125,9 @@ packages:
 
   retry@0.13.1:
     resolution: {tarball: https://registry.npmjs.org/retry/-/retry-0.13.1.tgz}
+
+  throttleit@2.1.0:
+    resolution: {tarball: https://registry.npmjs.org/throttleit/-/throttleit-2.1.0.tgz}
 
   undici@6.21.0:
     resolution: {tarball: https://registry.npmjs.org/undici/-/undici-6.21.0.tgz}
@@ -2814,6 +2820,8 @@ snapshots:
   is-node-process@1.2.0: {}
 
   retry@0.13.1: {}
+
+  throttleit@2.1.0: {}
 
   undici@6.21.0: {}
 
