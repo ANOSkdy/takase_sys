@@ -22,12 +22,18 @@ function formatDate(iso: string | null) {
   return date.toISOString().slice(0, 10);
 }
 
+const diffTabs = ["ALL", "UPDATE", "BLOCKED", "UNMATCHED", "NO_CHANGE", "NEW_CANDIDATE"] as const;
+type DiffTab = (typeof diffTabs)[number];
+
 export default async function DocumentDiffPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ documentId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { documentId } = await params;
+  const { tab } = await searchParams;
   const baseUrl = await getBaseUrl();
 
   const [lineRes, diffRes] = await Promise.all([
@@ -42,6 +48,11 @@ export default async function DocumentDiffPage({
     acc[item.classification] = (acc[item.classification] ?? 0) + 1;
     return acc;
   }, {});
+  const activeTab: DiffTab = diffTabs.includes((tab ?? "").toUpperCase() as DiffTab)
+    ? ((tab ?? "").toUpperCase() as DiffTab)
+    : "ALL";
+  const filteredDiffs =
+    activeTab === "ALL" ? diffItems : diffItems.filter((item) => item.classification === activeTab);
 
   return (
     <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
@@ -54,16 +65,17 @@ export default async function DocumentDiffPage({
 
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>更新サマリー</h2>
-        <ul style={{ display: "grid", gap: 4, margin: 0, paddingLeft: 16 }}>
-          {Object.entries(summary).map(([key, count]) => (
-            <li key={key}>
-              {key}: {count} 件
-            </li>
-          ))}
-          {Object.keys(summary).length === 0 && (
-            <li style={{ color: "var(--muted)" }}>差分はまだありません。</li>
-          )}
-        </ul>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {diffTabs.map((tabKey) => {
+            const count = tabKey === "ALL" ? diffItems.length : summary[tabKey] ?? 0;
+            const href = `/documents/${documentId}/diff?tab=${tabKey}`;
+            return (
+              <a key={tabKey} href={href} style={tabStyle(tabKey === activeTab)}>
+                {tabKey} ({count})
+              </a>
+            );
+          })}
+        </div>
       </section>
 
       <section style={cardStyle}>
@@ -115,26 +127,26 @@ export default async function DocumentDiffPage({
                 <Th>理由</Th>
                 <Th>仕入先</Th>
                 <Th>請求日</Th>
-                <Th>Before</Th>
-                <Th>After</Th>
+                <Th>Spec (Before → After)</Th>
+                <Th>Price (Before → After)</Th>
               </tr>
             </thead>
             <tbody>
-              {diffItems.map((item) => (
+              {filteredDiffs.map((item) => (
                 <tr key={item.diffItemId}>
                   <Td>{item.classification}</Td>
-                  <Td muted>{item.reason ?? "-"}</Td>
+                  <Td muted>{item.reason ?? (item.classification === "BLOCKED" ? "BLOCKED" : "-")}</Td>
                   <Td>{item.vendorName ?? "-"}</Td>
                   <Td muted>{formatDate(item.invoiceDate)}</Td>
                   <Td muted>
-                    <pre style={preStyle}>{JSON.stringify(item.before, null, 2)}</pre>
+                    {String(item.before.spec ?? "-")} → {String(item.after.spec ?? "-")}
                   </Td>
                   <Td muted>
-                    <pre style={preStyle}>{JSON.stringify(item.after, null, 2)}</pre>
+                    {String(item.before.unitPrice ?? "-")} → {String(item.after.unitPrice ?? "-")}
                   </Td>
                 </tr>
               ))}
-              {diffItems.length === 0 && (
+              {filteredDiffs.length === 0 && (
                 <tr>
                   <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
                     差分はまだありません。
@@ -201,9 +213,12 @@ function Td({ children, muted }: { children: ReactNode; muted?: boolean }) {
   );
 }
 
-const preStyle: CSSProperties = {
-  margin: 0,
+const tabStyle = (active: boolean): CSSProperties => ({
+  padding: "6px 10px",
+  borderRadius: 999,
+  border: "1px solid var(--border)",
+  background: active ? "rgba(0,0,0,0.06)" : "transparent",
+  color: active ? "inherit" : "var(--muted)",
+  textDecoration: "none",
   fontSize: 12,
-  whiteSpace: "pre-wrap",
-  wordBreak: "break-word",
-};
+});

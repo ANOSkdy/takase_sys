@@ -13,7 +13,7 @@ import {
 import { getEnv } from "@/config/env";
 import { normalizeText, makeProductKey } from "@/domain/normalize";
 import { safeParseFloat, toNumericString } from "@/domain/pg-numeric";
-import { shouldBlockUpdate } from "@/domain/update-policy";
+import { SPEC_UPDATE_MIN, shouldBlockUpdate } from "@/domain/update-policy";
 import { getStorageProvider } from "@/services/storage";
 import { parseInvoiceFromPdf } from "@/services/ai/gemini";
 import { PROMPT_VERSION } from "@/services/ai/prompt";
@@ -26,6 +26,36 @@ type ProductInsert = typeof productMaster.$inferInsert;
 type UpdateHistoryInsert = typeof updateHistory.$inferInsert;
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function computeSystemConfidence(input: {
+  modelConfidence: number | null;
+  quantity: number | null;
+  unitPrice: number | null;
+  amount: number | null;
+}): number | null {
+  if (input.modelConfidence === null) return null;
+  let score = input.modelConfidence;
+
+  if (
+    input.quantity !== null &&
+    input.unitPrice !== null &&
+    input.amount !== null &&
+    input.quantity > 0 &&
+    input.unitPrice > 0
+  ) {
+    const expected = input.quantity * input.unitPrice;
+    const deviation = expected > 0 ? Math.abs(input.amount - expected) / expected : 0;
+    if (deviation > 0.1) {
+      score *= 0.7;
+    }
+  }
+
+  return clamp(score, 0, 1);
+}
 
 type LineItemContext = {
   lineItemId: string;
@@ -181,7 +211,7 @@ function buildUpdateHistoryRow(input: {
     sourceType: "PDF",
     sourceId: input.sourceId,
     updatedAt: new Date(),
-    updatedBy: null,
+    updatedBy: "SYSTEM",
   };
 }
 
@@ -263,19 +293,17 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
     throw error;
   }
 
-  const vendorName = normalizeText(invoiceData.vendor_name);
-  if (!vendorName) {
-    throw new Error("Vendor name missing");
-  }
+  const vendorNameRaw = invoiceData.vendorName ? normalizeText(invoiceData.vendorName) : null;
+  const vendorName = vendorNameRaw && vendorNameRaw.length > 0 ? vendorNameRaw : null;
   const invoiceDate =
-    invoiceData.invoice_date && dateRegex.test(invoiceData.invoice_date)
-      ? invoiceData.invoice_date
+    invoiceData.invoiceDate && dateRegex.test(invoiceData.invoiceDate)
+      ? invoiceData.invoiceDate
       : null;
 
   await db.transaction(async (tx) => {
     const productKeySet = new Set<string>();
-    invoiceData.line_items.forEach((item) => {
-      const name = item.product_name?.trim() ?? "";
+    invoiceData.lineItems.forEach((item) => {
+      const name = item.productName?.trim() ?? "";
       if (!name) return;
       const spec = item.spec ?? null;
       const key = makeProductKey(name, spec);
@@ -315,20 +343,26 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
 
     const lineContexts: LineItemContext[] = [];
 
-    invoiceData.line_items.forEach((item, index) => {
-      const productNameRaw = normalizeText(item.product_name ?? "");
+    invoiceData.lineItems.forEach((item, index) => {
+      const productNameRaw = normalizeText(item.productName ?? "");
       if (!productNameRaw) return;
       const specRaw = item.spec ? normalizeText(item.spec) : null;
       const productKeyCandidate = makeProductKey(productNameRaw, specRaw);
       const quantity = toNumericString(item.quantity, 3);
-      const unitPrice = toNumericString(item.unit_price, 2);
+      const unitPrice = toNumericString(item.unitPrice, 2);
       const amount = toNumericString(item.amount, 2);
-      const modelConfidence = toNumericString(item.model_confidence, 3);
-      const systemConfidence = modelConfidence;
+      const modelConfidence = toNumericString(item.confidence, 3);
+      const systemConfidenceNum = computeSystemConfidence({
+        modelConfidence: safeParseFloat(item.confidence),
+        quantity: safeParseFloat(item.quantity),
+        unitPrice: safeParseFloat(item.unitPrice),
+        amount: safeParseFloat(item.amount),
+      });
+      const systemConfidence = toNumericString(systemConfidenceNum, 3);
       const matched = productMap.get(productKeyCandidate);
       lineContexts.push({
         lineItemId: crypto.randomUUID(),
-        lineNo: index + 1,
+        lineNo: item.lineNo ?? index + 1,
         productNameRaw,
         specRaw,
         productKeyCandidate,
@@ -393,12 +427,12 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       } else {
         productMap.set(context.productKeyCandidate, {
           productId,
-        productKey: context.productKeyCandidate,
-        productName: context.productNameRaw,
-        spec: context.specRaw,
-        defaultUnitPrice: context.unitPrice,
-        qualityFlag,
-        category: null,
+          productKey: context.productKeyCandidate,
+          productName: context.productNameRaw,
+          spec: context.specRaw,
+          defaultUnitPrice: context.unitPrice,
+          qualityFlag,
+          category: null,
         });
       }
 
@@ -436,7 +470,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       .map((context) => context.matchedProductId)
       .filter((id): id is string => Boolean(id));
 
-    const vendorRows: VendorPriceRow[] = matchedProductIds.length
+    const vendorRows: VendorPriceRow[] = matchedProductIds.length && vendorName
       ? await tx
           .select({
             vendorPriceId: vendorPrices.vendorPriceId,
@@ -502,12 +536,17 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
               ? null
               : 0;
 
-      const policy = shouldBlockUpdate({
-        systemConfidence: context.systemConfidence,
-        priceDeviation,
-        requiresSpecUpdate: hasSpecChange,
-        requiresPriceUpdate: hasPriceChange,
-      });
+      const systemConfidenceNum = safeParseFloat(context.systemConfidence);
+      const requiresUpdate = hasPriceChange || hasSpecChange;
+      const policy = requiresUpdate
+        ? shouldBlockUpdate({
+            systemConfidenceNum,
+            vendorName,
+            unitPriceNum: newUnitPriceNum,
+            keyIsWeak: !context.specRaw,
+            deviation: priceDeviation,
+          })
+        : { blocked: false };
 
       if (existingVendor) {
         before.unitPrice = existingVendor.unitPrice;
@@ -539,7 +578,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
 
       if (policy.blocked) continue;
 
-      if (hasSpecChange) {
+      if (hasSpecChange && systemConfidenceNum !== null && systemConfidenceNum >= SPEC_UPDATE_MIN) {
         const historyRow = buildUpdateHistoryRow({
           updateKey: `${parseRunId}:${context.matchedProductId}:spec`,
           productId: context.matchedProductId,
@@ -563,6 +602,9 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       }
 
       if (hasPriceChange && context.unitPrice) {
+        if (!vendorName) {
+          continue;
+        }
         const canUpdateByDate = isNewerInvoiceDate(invoiceDate, existingVendor?.priceUpdatedOn ?? null);
         let updated = false;
         if (existingVendor) {

@@ -1,8 +1,13 @@
 export function normalizeText(input: string): string {
-  return input.replace(/\s+/g, " ").trim();
+  return input
+    .normalize("NFKC")
+    .replace(/[\t\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export function makeProductKey(productName: string, spec?: string | null): string {
-  const base = [productName, spec ?? ""].filter(Boolean).join(" ");
-  return normalizeText(base).toLowerCase();
+  const nameNormalized = normalizeText(productName);
+  const specNormalized = spec ? normalizeText(spec) : "";
+  return specNormalized ? `${nameNormalized}｜${specNormalized}` : nameNormalized;
 }
