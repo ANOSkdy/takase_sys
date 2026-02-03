@@ -123,7 +123,8 @@ export default function DocumentsClient({
           });
 
           if (!initRes.ok) {
-            const text = await initRes.text();
+            const detail = await readProblemDetail(initRes);
+            const text = detail ?? (await initRes.text());
             throw new Error(text || "アップロードの初期化に失敗しました。");
           }
 
@@ -460,6 +461,17 @@ async function hashFile(file: File): Promise<string> {
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function readProblemDetail(response: Response): Promise<string | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/problem+json")) return null;
+  try {
+    const data = (await response.json()) as { detail?: string };
+    return typeof data.detail === "string" ? data.detail : null;
+  } catch {
+    return null;
+  }
 }
 
 function formatDateTime(iso: string) {

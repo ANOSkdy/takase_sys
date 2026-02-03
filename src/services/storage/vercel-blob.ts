@@ -4,16 +4,6 @@ import type { CreateUploadUrlInput, StorageProvider, UploadUrlResult } from "./i
 const DEFAULT_UPLOAD_EXPIRES_MS = 15 * 60 * 1000;
 const VERCEL_BLOB_API_BASE = "https://blob.vercel-storage.com";
 
-function normalizeFileName(name: string): string {
-  return name.replace(/[^\w.\-]+/g, "_").slice(0, 120) || "document.pdf";
-}
-
-function buildPathname(fileName: string): string {
-  const safeName = normalizeFileName(fileName);
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return `documents/${stamp}-${safeName}`;
-}
-
 type BlobUploadUrlResponse = {
   url?: string;
   uploadUrl?: string;
@@ -29,7 +19,7 @@ export class VercelBlobStorage implements StorageProvider {
     const token = requireEnv(env.BLOB_READ_WRITE_TOKEN, "BLOB_READ_WRITE_TOKEN");
 
     const payload = {
-      pathname: buildPathname(input.fileName),
+      pathname: input.storageKey,
       contentType: input.contentType,
       contentLength: input.size,
       access: "private",
@@ -55,7 +45,7 @@ export class VercelBlobStorage implements StorageProvider {
       throw new Error("Upload URL response missing url");
     }
 
-    const storageKey = data.pathname ?? data.blob?.pathname ?? uploadUrl;
+    const storageKey = input.storageKey;
     const expiresAt = data.expiresAt
       ? new Date(data.expiresAt).toISOString()
       : new Date(Date.now() + (data.expiresIn ?? DEFAULT_UPLOAD_EXPIRES_MS)).toISOString();

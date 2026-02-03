@@ -2,7 +2,7 @@ import { getEnv, requireEnv } from "@/config/env";
 import { VercelBlobStorage } from "@/services/storage/vercel-blob";
 
 export type CreateUploadUrlInput = {
-  fileName: string;
+  storageKey: string;
   contentType: string;
   size: number;
 };
