@@ -1,54 +1,69 @@
-import { NextResponse } from "next/server";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { problemResponse } from "@/app/api/_utils/problem";
-import { getEnv } from "@/config/env";
-import { initUploadSchema, validateInitUpload } from "@/services/documents/upload";
-import { getStorageProvider } from "@/services/storage";
+import { getMaxPdfSizeBytes } from "@/services/documents/constants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  let contentType: string | undefined;
-  let size: number | undefined;
-  let provider: string | undefined;
   try {
-    const body = await req.json();
-    const parsed = initUploadSchema.safeParse(body);
-    if (!parsed.success) {
-      return problemResponse(400, "Bad Request", "Invalid payload", parsed.error.flatten());
+    let body: HandleUploadBody;
+    try {
+      body = (await req.json()) as HandleUploadBody;
+    } catch {
+      return problemResponse(400, "Bad Request", "Invalid JSON body");
     }
+    const pathname = typeof body.pathname === "string" ? body.pathname : "";
+    const contentType = typeof body.contentType === "string" ? body.contentType : "";
+    const size = typeof body.size === "number" ? body.size : NaN;
+    const maxBytes = getMaxPdfSizeBytes();
 
-    const validation = validateInitUpload(parsed.data);
-    if (!validation.ok) {
-      return problemResponse(validation.status, validation.title, validation.detail);
+    if (!pathname || !isValidPathname(pathname)) {
+      return problemResponse(400, "Bad Request", "Invalid pathname");
     }
-
-    contentType = parsed.data.contentType;
-    size = parsed.data.size;
-
-    const env = getEnv();
-    provider = env.STORAGE_PROVIDER;
-    if (provider !== "vercel-blob") {
-      const errorId = crypto.randomUUID();
-      console.error("[documents] init-upload unknown storage provider", {
-        errorId,
-        provider,
-      });
+    if (!contentType) {
+      return problemResponse(400, "Bad Request", "Missing contentType");
+    }
+    if (!Number.isFinite(size) || size <= 0) {
+      return problemResponse(400, "Bad Request", "Missing size");
+    }
+    if (contentType !== "application/pdf") {
+      return problemResponse(415, "Unsupported Media Type", "Only application/pdf is accepted");
+    }
+    if (size > maxBytes) {
       return problemResponse(
-        500,
-        "Internal Server Error",
-        `Unknown storage provider (errorId=${errorId})`,
+        413,
+        "Payload Too Large",
+        `PDF size exceeds limit (${maxBytes} bytes)`,
       );
     }
 
-    const storageKey = buildStorageKey();
-    const storage = getStorageProvider();
-    const result = await storage.createUploadUrl({
-      storageKey,
-      contentType,
-      size,
+    const response = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async (blobPathname, clientPayload) => {
+        if (!isValidPathname(blobPathname)) {
+          throw new Error("Invalid pathname");
+        }
+        const safePayload = {
+          pathname: blobPathname,
+          clientPayload: typeof clientPayload === "string" ? clientPayload : undefined,
+        };
+        return {
+          allowedContentTypes: ["application/pdf"],
+          maximumSizeInBytes: maxBytes,
+          tokenPayload: JSON.stringify(safePayload),
+        };
+      },
+      onUploadCompleted: async ({ blob }) => {
+        console.info("[documents] upload completed", {
+          pathname: blob.pathname,
+          contentType: blob.contentType,
+          size: blob.size,
+        });
+      },
     });
-    return NextResponse.json(result);
+    return response;
   } catch (error) {
     const errorId = crypto.randomUUID();
     const err = error instanceof Error ? error : new Error("Unknown error");
@@ -58,9 +73,6 @@ export async function POST(req: Request) {
       name: err.name,
       message: err.message,
       cause: causeMessage,
-      provider,
-      size,
-      contentType,
     });
     return problemResponse(
       500,
@@ -70,10 +82,9 @@ export async function POST(req: Request) {
   }
 }
 
-function buildStorageKey(): string {
-  const now = new Date();
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const id = crypto.randomUUID();
-  return `documents/${yyyy}/${mm}/${id}.pdf`;
+function isValidPathname(pathname: string): boolean {
+  if (!pathname.startsWith("documents/")) return false;
+  if (!pathname.endsWith(".pdf")) return false;
+  if (pathname.includes("..")) return false;
+  return /^[a-zA-Z0-9/_\-.]+$/.test(pathname);
 }

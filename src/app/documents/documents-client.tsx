@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ReactNode } from "react";
 import type { DocumentListItem } from "@/services/documents/types";
@@ -112,38 +113,16 @@ export default function DocumentsClient({
         try {
           const fileHash = await hashFile(file);
 
-          const initRes = await fetch("/api/documents/init-upload", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              fileName: file.name,
-              contentType: file.type,
-              size: file.size,
-            }),
-          });
-
-          if (!initRes.ok) {
-            const detail = await readProblemDetail(initRes);
-            const text = detail ?? (await initRes.text());
-            throw new Error(text || "アップロードの初期化に失敗しました。");
-          }
-
-          const initData = (await initRes.json()) as {
-            uploadUrl: string;
-            storageKey: string;
-          };
-
+          const pathname = buildStorageKey();
           updateUpload({ status: "uploading", message: "PDFアップロード中" });
 
-          const uploadRes = await fetch(initData.uploadUrl, {
-            method: "PUT",
-            headers: { "content-type": "application/pdf" },
-            body: file,
+          const blob = await upload(pathname, file, {
+            handleUploadUrl: "/api/documents/init-upload",
+            contentType: "application/pdf",
           });
-
-          if (!uploadRes.ok) {
-            const text = await uploadRes.text();
-            throw new Error(text || "PDFのアップロードに失敗しました。");
+          const storageKey = getStorageKey(blob);
+          if (!storageKey) {
+            throw new Error("アップロード結果から保存キーを取得できませんでした。");
           }
 
           updateUpload({ status: "uploading", message: "登録処理中" });
@@ -153,7 +132,7 @@ export default function DocumentsClient({
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               fileName: file.name,
-              storageKey: initData.storageKey,
+              storageKey,
               fileHash,
               uploadNote: uploadNote.trim() || undefined,
             }),
@@ -167,9 +146,11 @@ export default function DocumentsClient({
           updateUpload({ status: "done", message: "完了" });
           await refresh();
         } catch (err) {
+          const response = getResponseFromUploadError(err);
+          const detail = response ? await readProblemDetail(response) : null;
           updateUpload({
             status: "error",
-            message: err instanceof Error ? err.message : "アップロードに失敗しました。",
+            message: detail ?? (err instanceof Error ? err.message : "アップロードに失敗しました。"),
           });
           setError("アップロードに失敗したファイルがあります。");
         }
@@ -472,6 +453,31 @@ async function readProblemDetail(response: Response): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+function getResponseFromUploadError(error: unknown): Response | null {
+  if (!error || typeof error !== "object") return null;
+  if (!("response" in error)) return null;
+  const response = (error as { response: unknown }).response;
+  return response instanceof Response ? response : null;
+}
+
+function getStorageKey(blob: { pathname?: string; url?: string }): string | null {
+  if (typeof blob.pathname === "string" && blob.pathname.length > 0) {
+    return blob.pathname;
+  }
+  if (typeof blob.url === "string" && blob.url.length > 0) {
+    return blob.url;
+  }
+  return null;
+}
+
+function buildStorageKey(): string {
+  const now = new Date();
+  const yyyy = now.getUTCFullYear();
+  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const id = crypto.randomUUID();
+  return `documents/${yyyy}/${mm}/${id}.pdf`;
 }
 
 function formatDateTime(iso: string) {
