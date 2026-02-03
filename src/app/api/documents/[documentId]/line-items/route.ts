@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { problemResponse } from "@/app/api/_utils/problem";
-import { getDocumentDetail } from "@/services/documents/repository";
-import { parseDocument } from "@/services/documents/parse";
+import { getDocumentDetail, listDocumentLineItems } from "@/services/documents/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +10,7 @@ const paramsSchema = z.object({
   documentId: z.string().uuid(),
 });
 
-export async function POST(
+export async function GET(
   _req: Request,
   context: { params: Promise<{ documentId: string }> },
 ) {
@@ -25,11 +24,10 @@ export async function POST(
     if (!doc || doc.isDeleted) {
       return problemResponse(404, "Not Found", "Document not found");
     }
-
-    const result = await parseDocument(parsedParams.data.documentId);
-    return NextResponse.json(result, { status: 202 });
+    const items = await listDocumentLineItems(parsedParams.data.documentId);
+    return NextResponse.json({ items });
   } catch (error) {
-    console.error("[documents] parse failed", error);
-    return problemResponse(500, "Internal Server Error", "Failed to parse document");
+    console.error("[documents] line items failed", error);
+    return problemResponse(500, "Internal Server Error", "Failed to fetch line items");
   }
 }

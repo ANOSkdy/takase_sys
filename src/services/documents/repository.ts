@@ -1,8 +1,10 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { documentParseRuns, documents } from "@/db/schema";
+import { documentDiffItems, documentLineItems, documentParseRuns, documents } from "@/db/schema";
 import type {
   DocumentDetail,
+  DocumentDiffItem,
+  DocumentLineItem,
   DocumentListItem,
   RegisterDocumentInput,
   RegisterDocumentResult,
@@ -166,4 +168,83 @@ export async function softDeleteDocument(
     documentId: row.documentId,
     status: row.status as SoftDeleteResult["status"],
   };
+}
+
+async function getLatestParseRunId(documentId: string): Promise<string | null> {
+  const db = getDb();
+  const [row] = await db
+    .select({ parseRunId: documentParseRuns.parseRunId })
+    .from(documentParseRuns)
+    .where(eq(documentParseRuns.documentId, documentId))
+    .orderBy(desc(documentParseRuns.startedAt))
+    .limit(1);
+  return row?.parseRunId ?? null;
+}
+
+export async function listDocumentLineItems(documentId: string): Promise<DocumentLineItem[]> {
+  const parseRunId = await getLatestParseRunId(documentId);
+  if (!parseRunId) return [];
+  const db = getDb();
+  const rows = await db
+    .select({
+      lineItemId: documentLineItems.lineItemId,
+      lineNo: documentLineItems.lineNo,
+      productNameRaw: documentLineItems.productNameRaw,
+      specRaw: documentLineItems.specRaw,
+      productKeyCandidate: documentLineItems.productKeyCandidate,
+      quantity: documentLineItems.quantity,
+      unitPrice: documentLineItems.unitPrice,
+      amount: documentLineItems.amount,
+      modelConfidence: documentLineItems.modelConfidence,
+      systemConfidence: documentLineItems.systemConfidence,
+      matchedProductId: documentLineItems.matchedProductId,
+    })
+    .from(documentLineItems)
+    .where(eq(documentLineItems.parseRunId, parseRunId))
+    .orderBy(documentLineItems.lineNo);
+
+  return rows.map((row) => ({
+    lineItemId: row.lineItemId,
+    lineNo: row.lineNo,
+    productNameRaw: row.productNameRaw ?? null,
+    specRaw: row.specRaw ?? null,
+    productKeyCandidate: row.productKeyCandidate ?? null,
+    quantity: row.quantity ?? null,
+    unitPrice: row.unitPrice ?? null,
+    amount: row.amount ?? null,
+    modelConfidence: row.modelConfidence ?? null,
+    systemConfidence: row.systemConfidence ?? null,
+    matchedProductId: row.matchedProductId ?? null,
+  }));
+}
+
+export async function listDocumentDiffItems(documentId: string): Promise<DocumentDiffItem[]> {
+  const parseRunId = await getLatestParseRunId(documentId);
+  if (!parseRunId) return [];
+  const db = getDb();
+  const rows = await db
+    .select({
+      diffItemId: documentDiffItems.diffItemId,
+      lineItemId: documentDiffItems.lineItemId,
+      classification: documentDiffItems.classification,
+      reason: documentDiffItems.reason,
+      vendorName: documentDiffItems.vendorName,
+      invoiceDate: documentDiffItems.invoiceDate,
+      before: documentDiffItems.before,
+      after: documentDiffItems.after,
+    })
+    .from(documentDiffItems)
+    .where(eq(documentDiffItems.parseRunId, parseRunId))
+    .orderBy(documentDiffItems.diffItemId);
+
+  return rows.map((row) => ({
+    diffItemId: row.diffItemId,
+    lineItemId: row.lineItemId,
+    classification: row.classification,
+    reason: row.reason ?? null,
+    vendorName: row.vendorName ?? null,
+    invoiceDate: toDateString(row.invoiceDate),
+    before: row.before ?? {},
+    after: row.after ?? {},
+  }));
 }
