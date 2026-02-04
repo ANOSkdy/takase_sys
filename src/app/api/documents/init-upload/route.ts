@@ -1,29 +1,36 @@
+﻿import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
-import { problemResponse } from "@/app/api/_utils/problem";
-import { initUploadSchema, validateInitUpload } from "@/services/documents/upload";
-import { getStorageProvider } from "@/services/storage";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+function sanitizeFilename(name: string): string {
+  const base = name.replace(/[\/\\]/g, "_").replace(/[\u0000-\u001f\u007f]/g, "");
+  const trimmed = base.trim().slice(0, 180);
+  return trimmed || "file.pdf";
+}
+
+export async function POST(request: Request) {
+  const body = (await request.json()) as HandleUploadBody;
+
   try {
-    const body = await req.json();
-    const parsed = initUploadSchema.safeParse(body);
-    if (!parsed.success) {
-      return problemResponse(400, "Bad Request", "Invalid payload", parsed.error.flatten());
-    }
+    const jsonResponse = await handleUpload({
+      body,
+      request,
+      onBeforeGenerateToken: async (pathname) => {
+        const safe = sanitizeFilename(pathname.replace(/^documents\//, ""));
+        return {
+          pathname: `documents/${safe}`,
+          addRandomSuffix: true,
+          allowedContentTypes: ["application/pdf"],
+          maximumSizeInBytes: 50 * 1024 * 1024,
+        };
+      },
+      // ローカルではcallback不要（DB登録はクライアント→/api/documentsで行う）
+    });
 
-    const validation = validateInitUpload(parsed.data);
-    if (!validation.ok) {
-      return problemResponse(validation.status, validation.title, validation.detail);
-    }
-
-    const storage = getStorageProvider();
-    const result = await storage.createUploadUrl(parsed.data);
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("[documents] init-upload failed", error);
-    return problemResponse(500, "Internal Server Error", "Failed to initialize upload");
+    return NextResponse.json(jsonResponse);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

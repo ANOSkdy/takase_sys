@@ -25,3 +25,5 @@ tsconfig.tsbuildinfo
 
 # TypeScript build info
 tsconfig.tsbuildinfo
+.vercel
+.env*.local

@@ -1,0 +1,13 @@
+﻿{
+  "contents": [{
+    "parts": [{ "text": "ping" }]
+  }],
+  "generationConfig": {
+    "responseMimeType": "application/json",
+    "responseJsonSchema": {
+      "type": "object",
+      "properties": { "ok": { "type": "string" } },
+      "required": ["ok"]
+    }
+  }
+}

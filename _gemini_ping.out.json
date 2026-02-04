@@ -1,0 +1,31 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "pong",
+            "thoughtSignature": "EssBCsgBAXLI2nw/CAS87+R+/aTIlh6oDiWhtvoEbUYq8i5VHTgfBX9ZnVIpXq0awpsFGQOb7+NBbwFlUIXTyxafoFhXTwO9W+0W1t+oKB0FSeWg+NxWt83cKLMCf9zPPRxW+spxWbFtNHddq3rQCMpi0GsrFd4oTBiA9nqPxs8Ss6kn6JPj2BJ/jcXTkVxR4PPMJ7+qoaGwXFInVfHCTJnYCVQCruLGDhQcVR3gfFVUE13OhBC7cLPvJ8NAXMCWmZfx1u+bQtyP5X0p/qg="
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 1,
+    "candidatesTokenCount": 1,
+    "totalTokenCount": 38,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 1
+      }
+    ],
+    "thoughtsTokenCount": 36
+  },
+  "modelVersion": "gemini-3-flash-preview",
+  "responseId": "5LGCac7EFaiV1e8Poo-3gAc"
+}

@@ -21,15 +21,23 @@ export async function POST(
   }
 
   try {
-    const doc = await getDocumentDetail(parsedParams.data.documentId);
+    const { documentId } = parsedParams.data;
+
+    const doc = await getDocumentDetail(documentId);
     if (!doc || doc.isDeleted) {
       return problemResponse(404, "Not Found", "Document not found");
     }
 
-    const result = await parseDocument(parsedParams.data.documentId);
+    const result = await parseDocument(documentId);
+
+    // 非同期処理開始の扱い（既存実装が202想定なら維持）
     return NextResponse.json(result, { status: 202 });
-  } catch (error) {
-    console.error("[documents] parse failed", error);
-    return problemResponse(500, "Internal Server Error", "Failed to parse document");
+  } catch (err) {
+    console.error("[documents] parse failed", err);
+
+    const msg = err instanceof Error ? err.message : String(err);
+    const detail = process.env.NODE_ENV === "development" ? msg : "Failed to parse document";
+
+    return problemResponse(500, "Internal Server Error", detail);
   }
 }
