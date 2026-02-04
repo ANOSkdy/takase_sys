@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { upload } from "@vercel/blob/client";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import type { ReactNode } from "react";
 import type { DocumentListItem } from "@/services/documents/types";
 
@@ -40,6 +48,12 @@ const jstDateFormatter = new Intl.DateTimeFormat("ja-JP", {
   day: "2-digit",
 });
 
+function sanitizeFilename(name: string): string {
+  const base = name.replace(/[\/\\]/g, "_").replace(/[\u0000-\u001f\u007f]/g, "");
+  const trimmed = base.trim().slice(0, 180);
+  return trimmed || "file.pdf";
+}
+
 export default function DocumentsClient({
   initialItems,
   maxPdfMb,
@@ -77,6 +91,7 @@ export default function DocumentsClient({
     async (files: FileList | File[]) => {
       const fileArray = Array.from(files);
       if (fileArray.length === 0) return;
+
       setError(null);
       setBusy(true);
 
@@ -87,94 +102,74 @@ export default function DocumentsClient({
       }));
       setUploads((prev) => [...newUploads, ...prev]);
 
-      for (const [index, file] of fileArray.entries()) {
-        const uploadId = newUploads[index]?.id;
-        const updateUpload = (patch: Partial<UploadItem>) => {
-          setUploads((prev) =>
-            prev.map((u) => (u.id === uploadId ? { ...u, ...patch } : u)),
-          );
-        };
-
-        if (file.type !== "application/pdf") {
-          updateUpload({ status: "error", message: "PDF以外はアップロードできません。" });
-          continue;
-        }
-        if (file.size > maxBytes) {
-          updateUpload({
-            status: "error",
-            message: `ファイルサイズが上限（${maxPdfMb}MB）を超えています。`,
-          });
-          continue;
-        }
-
-        updateUpload({ status: "uploading", message: "アップロード準備中" });
-
-        try {
-          const fileHash = await hashFile(file);
-
-          const initRes = await fetch("/api/documents/init-upload", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              fileName: file.name,
-              contentType: file.type,
-              size: file.size,
-            }),
-          });
-
-          if (!initRes.ok) {
-            const text = await initRes.text();
-            throw new Error(text || "アップロードの初期化に失敗しました。");
-          }
-
-          const initData = (await initRes.json()) as {
-            uploadUrl: string;
-            storageKey: string;
+      try {
+        for (const [index, file] of fileArray.entries()) {
+          const uploadId = newUploads[index]?.id;
+          const updateUpload = (patch: Partial<UploadItem>) => {
+            setUploads((prev) =>
+              prev.map((u) => (u.id === uploadId ? { ...u, ...patch } : u)),
+            );
           };
 
-          updateUpload({ status: "uploading", message: "PDFアップロード中" });
-
-          const uploadRes = await fetch(initData.uploadUrl, {
-            method: "PUT",
-            headers: { "content-type": "application/pdf" },
-            body: file,
-          });
-
-          if (!uploadRes.ok) {
-            const text = await uploadRes.text();
-            throw new Error(text || "PDFのアップロードに失敗しました。");
+          if (file.type !== "application/pdf") {
+            updateUpload({ status: "error", message: "PDF以外はアップロードできません。" });
+            continue;
+          }
+          if (file.size > maxBytes) {
+            updateUpload({
+              status: "error",
+              message: `ファイルサイズが上限（${maxPdfMb}MB）を超えています。`,
+            });
+            continue;
           }
 
-          updateUpload({ status: "uploading", message: "登録処理中" });
+          updateUpload({ status: "uploading", message: "アップロード準備中" });
 
-          const registerRes = await fetch("/api/documents", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              fileName: file.name,
-              storageKey: initData.storageKey,
-              fileHash,
-              uploadNote: uploadNote.trim() || undefined,
-            }),
-          });
+          try {
+            const fileHash = await hashFile(file);
 
-          if (!registerRes.ok) {
-            const text = await registerRes.text();
-            throw new Error(text || "登録に失敗しました。");
+            updateUpload({ status: "uploading", message: "PDFアップロード中" });
+
+            const safeName = sanitizeFilename(file.name);
+            const pathname = `documents/${safeName}`;
+
+            const blob = await upload(pathname, file, {
+              access: "public",
+              handleUploadUrl: "/api/documents/init-upload",
+            });
+
+            updateUpload({ status: "uploading", message: "登録処理中" });
+
+            const registerRes = await fetch("/api/documents", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                fileName: file.name,
+                // parse 側が fetch(url) するなら、ここは URL を保存するのが最短
+                storageKey: blob.url,
+                fileHash,
+                uploadNote: uploadNote.trim() || undefined,
+              }),
+            });
+
+            if (!registerRes.ok) {
+              const text = await registerRes.text().catch(() => "");
+              throw new Error(text || "登録に失敗しました。");
+            }
+
+            updateUpload({ status: "done", message: "完了" });
+            await refresh();
+          } catch (err) {
+            updateUpload({
+              status: "error",
+              message: err instanceof Error ? err.message : "アップロードに失敗しました。",
+            });
+            setError("アップロードに失敗したファイルがあります。");
           }
-
-          updateUpload({ status: "done", message: "完了" });
-          await refresh();
-        } catch (err) {
-          updateUpload({
-            status: "error",
-            message: err instanceof Error ? err.message : "アップロードに失敗しました。",
-          });
-          setError("アップロードに失敗したファイルがあります。");
         }
+      } finally {
+        setBusy(false);
       }
-
-      setBusy(false);
     },
     [maxBytes, maxPdfMb, refresh, uploadNote],
   );
@@ -191,14 +186,20 @@ export default function DocumentsClient({
         }),
       });
       if (!res.ok) {
-        const text = await res.text();
+        const text = await res.text().catch(() => "");
         throw new Error(text || "削除に失敗しました。");
       }
       setDeleteState(null);
       await refresh();
     } catch (err) {
       setDeleteState((prev) =>
-        prev ? { ...prev, busy: false, error: err instanceof Error ? err.message : "削除失敗" } : null,
+        prev
+          ? {
+              ...prev,
+              busy: false,
+              error: err instanceof Error ? err.message : "削除失敗",
+            }
+          : null,
       );
     }
   };
@@ -208,7 +209,7 @@ export default function DocumentsClient({
     try {
       const res = await fetch(`/api/documents/${documentId}/parse`, { method: "POST" });
       if (!res.ok) {
-        const text = await res.text();
+        const text = await res.text().catch(() => "");
         throw new Error(text || "解析に失敗しました。");
       }
       await refresh();
@@ -240,10 +241,10 @@ export default function DocumentsClient({
           <div style={{ marginTop: "var(--space-3)", display: "grid", gap: "var(--space-2)" }}>
             <strong>アップロード状況</strong>
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
-              {uploads.map((upload) => (
-                <li key={upload.id} style={uploadRowStyle}>
-                  <span>{upload.fileName}</span>
-                  <span style={uploadStatusStyle(upload.status)}>{upload.message}</span>
+              {uploads.map((u) => (
+                <li key={u.id} style={uploadRowStyle}>
+                  <span>{u.fileName}</span>
+                  <span style={uploadStatusStyle(u.status)}>{u.message}</span>
                 </li>
               ))}
             </ul>
@@ -330,18 +331,18 @@ export default function DocumentsClient({
             <p style={{ color: "var(--muted)" }}>
               「{deleteState.target.fileName}」を削除します。ファイル名を入力して確認してください。
             </p>
+
             <div style={{ display: "grid", gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
               <label style={labelStyle}>ファイル名の再入力</label>
               <input
                 value={deleteState.confirmName}
                 onChange={(e) =>
-                  setDeleteState((prev) =>
-                    prev ? { ...prev, confirmName: e.target.value } : prev,
-                  )
+                  setDeleteState((prev) => (prev ? { ...prev, confirmName: e.target.value } : prev))
                 }
                 style={inputStyle}
               />
             </div>
+
             <div style={{ display: "grid", gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
               <label style={labelStyle}>削除理由（任意）</label>
               <textarea
@@ -355,7 +356,9 @@ export default function DocumentsClient({
                 style={textareaStyle}
               />
             </div>
+
             {deleteState.error && <p style={{ color: "var(--color-danger)" }}>{deleteState.error}</p>}
+
             <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
               <button style={btnSecondary} onClick={() => setDeleteState(null)} disabled={deleteState.busy}>
                 キャンセル
@@ -363,9 +366,7 @@ export default function DocumentsClient({
               <button
                 style={btnDanger}
                 onClick={onDelete}
-                disabled={
-                  deleteState.busy || deleteState.confirmName !== deleteState.target.fileName
-                }
+                disabled={deleteState.busy || deleteState.confirmName !== deleteState.target.fileName}
               >
                 削除する
               </button>
