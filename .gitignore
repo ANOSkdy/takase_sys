@@ -27,3 +27,9 @@ tsconfig.tsbuildinfo
 tsconfig.tsbuildinfo
 .vercel
 .env*.local
+
+# local debug artifacts
+_blob_ping.txt
+_gemini_*.json
+_gemini_*.txt
+*.bak_*
