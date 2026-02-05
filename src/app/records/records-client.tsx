@@ -39,6 +39,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   const router = useRouter();
   const sp = useSearchParams();
 
+  const [desktopOpen, setDesktopOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [form, setForm] = useState<FormState>({
@@ -232,7 +233,16 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   return (
     <section style={{ display: "grid", gap: "var(--space-4)" }}>
       <div className="filtersDesktop" style={cardStyle}>
-        {Filters}
+        <button
+          type="button"
+          onClick={() => setDesktopOpen((prev) => !prev)}
+          style={accordionButton}
+          aria-expanded={desktopOpen}
+        >
+          <span>フィルタ</span>
+          <span aria-hidden="true">{desktopOpen ? "−" : "+"}</span>
+        </button>
+        {desktopOpen && <div style={{ marginTop: "var(--space-3)" }}>{Filters}</div>}
       </div>
 
       <div className="filtersMobile" style={{ display: "none" }}>
@@ -391,6 +401,21 @@ const btnSecondary: React.CSSProperties = {
   background: "transparent",
   color: "var(--text)",
   cursor: "pointer",
+};
+
+const accordionButton: React.CSSProperties = {
+  width: "100%",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "var(--space-2)",
+  border: "none",
+  background: "transparent",
+  padding: 0,
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: "pointer",
+  color: "var(--text)",
 };
 
 const grid2: React.CSSProperties = {
