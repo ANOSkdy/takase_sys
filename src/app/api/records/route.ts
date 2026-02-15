@@ -3,11 +3,20 @@ import { recordSearchSchema, searchRecords } from "@/services/records/search";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store, max-age=0",
+  "Content-Type": "application/json; charset=utf-8",
+};
 
 function problem(status: number, title: string, detail: string, extra?: unknown) {
   return new NextResponse(JSON.stringify({ title, detail, status, ...(extra ? { extra } : {}) }), {
     status,
-    headers: { "content-type": "application/problem+json; charset=utf-8" },
+    headers: {
+      "cache-control": "no-store, max-age=0",
+      "content-type": "application/problem+json; charset=utf-8",
+    },
   });
 }
 
@@ -21,7 +30,7 @@ export async function GET(req: Request) {
     }
 
     const data = await searchRecords(parsed.data);
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: noStoreHeaders });
   } catch {
     return problem(500, "Internal Server Error", "Failed to search records");
   }

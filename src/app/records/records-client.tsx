@@ -8,18 +8,10 @@ function formatYen(n: number) {
   if (!Number.isFinite(n)) return "-";
   return new Intl.NumberFormat("ja-JP").format(n);
 }
-const jstDateFormatter = new Intl.DateTimeFormat("ja-JP", {
-  timeZone: "Asia/Tokyo",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
 function formatDate(iso: string | null) {
   if (!iso) return "-";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "-";
-  return jstDateFormatter.format(date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "-";
+  return iso.replaceAll("-", "/");
 }
 
 type FormState = {
