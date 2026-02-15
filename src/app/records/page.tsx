@@ -1,4 +1,5 @@
-﻿import RecordsSearchClient from "./records-client";
+﻿import Link from "next/link";
+import RecordsSearchClient from "./records-client";
 import { recordSearchSchema, searchRecords } from "@/services/records/search";
 
 export const runtime = "nodejs";
@@ -28,6 +29,20 @@ export default async function RecordsPage({
     <main style={{ padding: "var(--space-6)" }}>
       <header style={{ marginBottom: "var(--space-4)" }}>
         <h1 style={{ margin: 0 }}>仕切り表</h1>
+        <Link
+          href="/documents"
+          style={{
+            marginTop: "var(--space-2)",
+            display: "inline-block",
+            color: "inherit",
+            textDecoration: "none",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            padding: "0.5rem 0.75rem",
+          }}
+        >
+          納品書PDFへ
+        </Link>
       </header>
 
       <RecordsSearchClient result={result} />
