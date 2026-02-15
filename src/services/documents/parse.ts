@@ -41,7 +41,10 @@ type LineItemContext = {
   systemConfidenceNum: number | null;
   matchedProductId: string | null;
   matchedProductSpec: string | null;
+  matchedProductCategory: string | null;
 };
+
+const PDF_DEFAULT_CATEGORY = "未分類";
 
 type VendorPriceRow = {
   vendorPriceId: string;
@@ -153,7 +156,7 @@ function buildProductRow(input: {
     productKey: input.productKey,
     productName: input.productName,
     spec: input.spec,
-    category: null,
+    category: PDF_DEFAULT_CATEGORY,
     defaultUnitPrice: input.defaultUnitPrice,
     qualityFlag: input.qualityFlag,
     lastUpdatedAt: new Date(),
@@ -379,6 +382,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         systemConfidenceNum,
         matchedProductId: matched?.productId ?? null,
         matchedProductSpec: matched?.spec ?? null,
+        matchedProductCategory: matched?.category ?? null,
       });
     });
 
@@ -438,7 +442,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           spec: context.specRaw,
           defaultUnitPrice: context.unitPrice,
           qualityFlag,
-          category: null,
+          category: PDF_DEFAULT_CATEGORY,
         });
       }
 
@@ -461,6 +465,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         if (match) {
           context.matchedProductId = match.productId;
           context.matchedProductSpec = match.spec ?? null;
+          context.matchedProductCategory = match.category ?? null;
         }
       }
     });
@@ -565,6 +570,10 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       }
       before.productId = context.matchedProductId;
       before.spec = context.matchedProductSpec;
+      if (context.matchedProductCategory) {
+        before.category = context.matchedProductCategory;
+        after.category = context.matchedProductCategory;
+      }
 
       let classification = "NO_CHANGE";
       if (requiresUpdate) {
