@@ -76,6 +76,18 @@ type DbRow = {
   totalCount: string | number;
 };
 
+function toIsoDate(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return trimmed;
+    }
+    return null;
+  }
+  return value.toISOString().slice(0, 10);
+}
+
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (m) => `\\${m}`);
 }
@@ -186,7 +198,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     category: r.category ?? null,
     vendorName: r.vendorName,
     unitPrice: Number(r.unitPrice),
-    lastUpdatedOn: r.lastUpdatedOn ? String(r.lastUpdatedOn).slice(0, 10) : null,
+    lastUpdatedOn: toIsoDate(r.lastUpdatedOn),
   }));
 
   return { items, categories, total, page: params.page, pageSize: params.pageSize };
