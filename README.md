@@ -25,6 +25,11 @@
 - Production DBマイグレーションは自動化しない
 - Previewで自動化する場合も「環境 + フラグ」の二重ゲートが必須
 
+## Runtime configuration
+
+- `APP_MAX_PDF_MB` : アップロード可能なPDFサイズ上限（MB、既定20）
+- `APP_MAX_PDF_PAGES` : 1回の解析で処理するPDFページ上限（既定30）
+
 ## Notes
 
 - v1 schema は db/schema/v1.sql に保存（Neonへ投入済み）

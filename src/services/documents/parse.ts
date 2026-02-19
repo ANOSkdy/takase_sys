@@ -15,7 +15,9 @@ import { normalizeText, makeProductKey } from "@/domain/normalize";
 import { safeParseFloat, toNumericString } from "@/domain/pg-numeric";
 import { shouldBlockUpdate } from "@/domain/update-policy";
 import { getStorageProvider } from "@/services/storage";
-import { parseInvoiceFromPdf } from "@/services/ai/gemini";
+import { parseInvoiceFromPdfPage } from "@/services/ai/gemini";
+import { parseInvoiceFromPdfPages } from "@/services/documents/pdf-pipeline";
+import { getMaxPdfPages } from "@/services/documents/constants";
 import { PROMPT_VERSION } from "@/services/ai/prompt";
 
 type ParseRunInsert = typeof documentParseRuns.$inferInsert;
@@ -268,6 +270,8 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
   });
 
   let invoiceData;
+  let pageCount = 1;
+  let processedPages = 1;
   try {
     const storage = getStorageProvider();
     if (!storage.getDownloadUrl) {
@@ -283,7 +287,21 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       throw new Error("Failed to download PDF");
     }
     const buffer = Buffer.from(await pdfResponse.arrayBuffer());
-    invoiceData = await parseInvoiceFromPdf(buffer.toString("base64"));
+    const pageResult = await parseInvoiceFromPdfPages({
+      pdfBuffer: buffer,
+      maxPages: getMaxPdfPages(),
+      parsePage: parseInvoiceFromPdfPage,
+    });
+    invoiceData = pageResult.invoice;
+    pageCount = pageResult.pageCount;
+    processedPages = pageResult.processedPages;
+
+    console.info("document_parse_pages", {
+      documentId,
+      parseRunId,
+      pageCount,
+      processedPages,
+    });
   } catch (error) {
     await db.transaction(async (tx) => {
       await tx
@@ -687,6 +705,8 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         stats: {
           lineItemCount: lineContexts.length,
           diffCount: diffRows.length,
+          pageCount,
+          processedPages,
         },
       })
       .where(eq(documentParseRuns.parseRunId, parseRunId));

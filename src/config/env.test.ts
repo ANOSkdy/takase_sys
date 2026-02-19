@@ -32,4 +32,25 @@ describe("serverEnvSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("accepts APP_MAX_PDF_PAGES as a positive integer", () => {
+    const result = serverEnvSchema.safeParse({
+      DATABASE_URL: "postgres://example",
+      STORAGE_PROVIDER: "vercel-blob",
+      BLOB_READ_WRITE_TOKEN: "token",
+      APP_MAX_PDF_PAGES: "30",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects APP_MAX_PDF_PAGES when zero", () => {
+    const result = serverEnvSchema.safeParse({
+      DATABASE_URL: "postgres://example",
+      STORAGE_PROVIDER: "vercel-blob",
+      BLOB_READ_WRITE_TOKEN: "token",
+      APP_MAX_PDF_PAGES: "0",
+    });
+    expect(result.success).toBe(false);
+  });
+
 });

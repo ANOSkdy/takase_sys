@@ -72,7 +72,10 @@ function normalizeJsonSchema(schema: unknown): unknown {
   return out;
 }
 
-export async function parseInvoiceFromPdf(pdfBase64: string): Promise<ParsedInvoice> {
+async function requestInvoiceParse(input: {
+  pdfBase64: string;
+  pageInstruction?: string;
+}): Promise<ParsedInvoice> {
   const env = getEnv();
   const apiKey = requireEnv(env.GEMINI_API_KEY, "GEMINI_API_KEY");
   const model = requireEnv(env.GEMINI_MODEL, "GEMINI_MODEL");
@@ -87,11 +90,11 @@ export async function parseInvoiceFromPdf(pdfBase64: string): Promise<ParsedInvo
       {
         role: "user",
         parts: [
-          { text: SYSTEM_PROMPT },
+          { text: input.pageInstruction ? `${SYSTEM_PROMPT}\n\n${input.pageInstruction}` : SYSTEM_PROMPT },
           {
             inline_data: {
               mime_type: "application/pdf",
-              data: pdfBase64,
+              data: input.pdfBase64,
             },
           },
         ],
@@ -143,4 +146,18 @@ export async function parseInvoiceFromPdf(pdfBase64: string): Promise<ParsedInvo
   }
 
   return parsed.data;
+}
+
+
+export async function parseInvoiceFromPdf(pdfBase64: string): Promise<ParsedInvoice> {
+  return requestInvoiceParse({ pdfBase64 });
+}
+
+export async function parseInvoiceFromPdfPage(input: {
+  pdfBase64: string;
+  pageNumber: number;
+  totalPages: number;
+}): Promise<ParsedInvoice> {
+  const pageInstruction = `Extract line items only from page ${input.pageNumber} of ${input.totalPages}. If the page has no invoice lines, return lineItems as an empty array.`;
+  return requestInvoiceParse({ pdfBase64: input.pdfBase64, pageInstruction });
 }

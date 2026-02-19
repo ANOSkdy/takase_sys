@@ -21,6 +21,7 @@ export const serverEnvSchema = z.object({
 
   // Upload limits
   APP_MAX_PDF_MB: z.coerce.number().int().positive().optional(),
+  APP_MAX_PDF_PAGES: z.coerce.number().int().positive().optional(),
 
   // Preview-only gate (future use)
   MIGRATE_ON_PREVIEW: z.string().optional(),
