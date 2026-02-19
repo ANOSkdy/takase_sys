@@ -46,12 +46,14 @@ export const recordSearchSchema = z
 export type RecordSearchParams = z.infer<typeof recordSearchSchema>;
 
 export type RecordRow = {
+  recordId: string;
   productId: string;
   productName: string;
   spec: string | null;
   category: string | null;
   vendorName: string;
   unitPrice: number;
+  priceUpdatedOn: string | null;
   lastUpdatedOn: string | null; // YYYY-MM-DD
 };
 
@@ -66,12 +68,14 @@ export type RecordSearchResult = {
 type SqlParam = string | number | boolean | null;
 
 type DbRow = {
+  recordId: string;
   productId: string;
   productName: string;
   spec: string | null;
   category: string | null;
   vendorName: string;
   unitPrice: string | number;
+  priceUpdatedOn: string | Date | null;
   lastUpdatedOn: string | Date | null;
   totalCount: string | number;
 };
@@ -157,12 +161,14 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
 
   const sql = `
     SELECT
+      vp.vendor_price_id AS "recordId",
       pm.product_id AS "productId",
       pm.product_name AS "productName",
       pm.spec AS "spec",
       pm.category AS "category",
       vp.vendor_name AS "vendorName",
       vp.unit_price AS "unitPrice",
+      vp.price_updated_on AS "priceUpdatedOn",
       COALESCE(vp.price_updated_on, vp.updated_at::date) AS "lastUpdatedOn",
       COUNT(*) OVER() AS "totalCount"
     FROM vendor_prices vp
@@ -192,12 +198,14 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     .filter(Boolean);
 
   const items: RecordRow[] = rows.map((r) => ({
+    recordId: r.recordId,
     productId: r.productId,
     productName: r.productName,
     spec: r.spec ?? null,
     category: r.category ?? null,
     vendorName: r.vendorName,
     unitPrice: Number(r.unitPrice),
+    priceUpdatedOn: toIsoDate(r.priceUpdatedOn),
     lastUpdatedOn: toIsoDate(r.lastUpdatedOn),
   }));
 

@@ -1,8 +1,16 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { RecordSearchResult } from "@/services/records/search";
+import type { RecordRow, RecordSearchResult } from "@/services/records/search";
+
+type ApiProblem = {
+  title?: string;
+  detail?: string;
+  errors?: {
+    fieldErrors?: Record<string, string[]>;
+  };
+};
 
 function formatYen(n: number) {
   if (!Number.isFinite(n)) return "-";
@@ -27,12 +35,23 @@ type FormState = {
   pageSize: string;
 };
 
+type EditFormState = {
+  productName: string;
+  spec: string;
+  category: string;
+  vendorName: string;
+  unitPrice: string;
+  priceUpdatedOn: string;
+};
+
 export default function RecordsSearchClient({ result }: { result: RecordSearchResult }) {
   const router = useRouter();
   const sp = useSearchParams();
 
   const [desktopOpen, setDesktopOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [items, setItems] = useState<RecordRow[]>(result.items);
+  const [rowRestoreTarget, setRowRestoreTarget] = useState<HTMLElement | null>(null);
 
   const [form, setForm] = useState<FormState>({
     q: "",
@@ -49,6 +68,11 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    setItems(result.items);
+  }, [result.items]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setForm({
       q: sp.get("q") ?? "",
       name: sp.get("name") ?? "",
@@ -62,6 +86,9 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
       pageSize: sp.get("pageSize") ?? "50",
     });
   }, [sp]);
+
+  const editId = sp.get("edit");
+  const activeRecord = editId ? items.find((item) => item.recordId === editId) ?? null : null;
 
   const page = Number(sp.get("page") ?? "1");
   const pageSize = Number(sp.get("pageSize") ?? form.pageSize ?? "50");
@@ -100,6 +127,22 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   const clear = () => {
     setDrawerOpen(false);
     router.push("/records");
+  };
+
+  const openEdit = (item: RecordRow, rowElement: HTMLElement) => {
+    setRowRestoreTarget(rowElement);
+    router.push(`/records?${withParam(sp, { edit: item.recordId })}`);
+  };
+
+  const closeEdit = () => {
+    router.push(`/records?${withParam(sp, { edit: "" })}`);
+    rowRestoreTarget?.focus();
+  };
+
+  const handleUpdated = (updated: RecordRow) => {
+    setItems((prev) => prev.map((item) => (item.recordId === updated.recordId ? updated : item)));
+    closeEdit();
+    router.refresh();
   };
 
   const from = result.total === 0 ? 0 : (result.page - 1) * result.pageSize + 1;
@@ -297,8 +340,20 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
             </tr>
           </thead>
           <tbody>
-            {result.items.map((r) => (
-              <tr key={`${r.productId}:${r.vendorName}`}>
+            {items.map((r) => (
+              <tr
+                key={r.recordId}
+                tabIndex={0}
+                role="button"
+                onClick={(e) => openEdit(r, e.currentTarget)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openEdit(r, e.currentTarget);
+                  }
+                }}
+                style={{ cursor: "pointer" }}
+              >
                 <Td>{r.productName}</Td>
                 <Td muted>{r.spec ?? "-"}</Td>
                 <Td align="right">{formatYen(r.unitPrice)}</Td>
@@ -307,7 +362,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
                 <Td muted>{r.category ?? "-"}</Td>
               </tr>
             ))}
-            {result.items.length === 0 && (
+            {items.length === 0 && (
               <tr>
                 <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
                   条件に一致するレコードがありません。
@@ -317,6 +372,10 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
           </tbody>
         </table>
       </div>
+
+      {activeRecord && (
+        <RecordEditModal record={activeRecord} onClose={closeEdit} onUpdated={handleUpdated} />
+      )}
 
       <style jsx>{`
         @media (max-width: 840px) {
@@ -332,19 +391,195 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   );
 }
 
+function RecordEditModal({
+  record,
+  onClose,
+  onUpdated,
+}: {
+  record: RecordRow;
+  onClose: () => void;
+  onUpdated: (record: RecordRow) => void;
+}) {
+  const [form, setForm] = useState<EditFormState>({
+    productName: record.productName,
+    spec: record.spec ?? "",
+    category: record.category ?? "",
+    vendorName: record.vendorName,
+    unitPrice: String(record.unitPrice),
+    priceUpdatedOn: record.priceUpdatedOn ?? "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const productNameRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    productNameRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const fetchLatest = async () => {
+      setLoading(true);
+      setErrorMessage(null);
+
+      try {
+        const res = await fetch(`/api/records/${record.recordId}`, { cache: "no-store" });
+        if (!res.ok) {
+          setLoading(false);
+          return;
+        }
+        const latest = (await res.json()) as RecordRow;
+        setForm({
+          productName: latest.productName,
+          spec: latest.spec ?? "",
+          category: latest.category ?? "",
+          vendorName: latest.vendorName,
+          unitPrice: String(latest.unitPrice),
+          priceUpdatedOn: latest.priceUpdatedOn ?? "",
+        });
+      } catch {
+        // no-op: keep initial data
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void fetchLatest();
+  }, [record.recordId]);
+
+  useEffect(() => {
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [busy, onClose]);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErrorMessage(null);
+    setFieldErrors({});
+
+    try {
+      const res = await fetch(`/api/records/${record.recordId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          productName: form.productName,
+          spec: form.spec,
+          category: form.category,
+          vendorName: form.vendorName,
+          unitPrice: form.unitPrice,
+          priceUpdatedOn: form.priceUpdatedOn || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const problem = (await res.json().catch(() => null)) as ApiProblem | null;
+        setErrorMessage(problem?.detail ?? "更新に失敗しました。入力内容を確認してください。");
+        setFieldErrors(problem?.errors?.fieldErrors ?? {});
+        return;
+      }
+
+      const updated = (await res.json()) as RecordRow;
+      onUpdated(updated);
+    } catch {
+      setErrorMessage("通信エラーが発生しました。時間をおいて再度お試しください。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={modalBackdrop} role="dialog" aria-modal="true" onClick={() => !busy && onClose()}>
+      <div style={modalPanel} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>レコード編集</h3>
+
+        {loading && <p style={{ color: "var(--muted)", marginTop: 0 }}>最新データを確認中...</p>}
+
+        <form onSubmit={save} style={{ display: "grid", gap: "var(--space-3)" }}>
+          <Field
+            label="品名"
+            value={form.productName}
+            onChange={(v) => setForm({ ...form, productName: v })}
+            error={fieldErrors.productName?.[0]}
+            inputRef={productNameRef}
+          />
+          <Field
+            label="規格"
+            value={form.spec}
+            onChange={(v) => setForm({ ...form, spec: v })}
+            error={fieldErrors.spec?.[0]}
+          />
+          <Field
+            label="カテゴリ"
+            value={form.category}
+            onChange={(v) => setForm({ ...form, category: v })}
+            error={fieldErrors.category?.[0]}
+          />
+          <Field
+            label="ベンダー"
+            value={form.vendorName}
+            onChange={(v) => setForm({ ...form, vendorName: v })}
+            error={fieldErrors.vendorName?.[0]}
+          />
+          <Field
+            label="価格"
+            value={form.unitPrice}
+            onChange={(v) => setForm({ ...form, unitPrice: v })}
+            error={fieldErrors.unitPrice?.[0]}
+          />
+          <div style={{ display: "grid", gap: "var(--space-2)" }}>
+            <label style={{ fontSize: 12, color: "var(--muted)" }}>価格更新日</label>
+            <input
+              type="date"
+              value={form.priceUpdatedOn}
+              onChange={(e) => setForm({ ...form, priceUpdatedOn: e.target.value })}
+              style={inputStyle}
+            />
+            {fieldErrors.priceUpdatedOn?.[0] && (
+              <p style={{ margin: 0, color: "var(--color-danger)", fontSize: 12 }}>
+                {fieldErrors.priceUpdatedOn[0]}
+              </p>
+            )}
+          </div>
+
+          {errorMessage && <p style={{ margin: 0, color: "var(--color-danger)" }}>{errorMessage}</p>}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-2)" }}>
+            <button type="button" style={btnSecondary} onClick={onClose} disabled={busy}>
+              キャンセル
+            </button>
+            <button type="submit" style={btnPrimary} disabled={busy}>
+              {busy ? "更新中..." : "更新"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function Field({
   label,
   value,
   onChange,
+  error,
+  inputRef,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  error?: string;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   return (
     <div style={{ display: "grid", gap: "var(--space-2)" }}>
       <label style={{ fontSize: 12, color: "var(--muted)" }}>{label}</label>
-      <input value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
+      <input ref={inputRef} value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
+      {error && <p style={{ margin: 0, color: "var(--color-danger)", fontSize: 12 }}>{error}</p>}
     </div>
   );
 }
@@ -424,11 +659,32 @@ const drawerBackdrop: React.CSSProperties = {
   display: "grid",
   placeItems: "end",
   padding: "var(--space-4)",
+  zIndex: 20,
 };
 
 const drawerPanel: React.CSSProperties = {
   width: "min(920px, 100%)",
   maxHeight: "80vh",
+  overflow: "auto",
+  background: "var(--surface)",
+  borderRadius: "var(--radius-lg)",
+  boxShadow: "var(--shadow-soft)",
+  padding: "var(--space-4)",
+};
+
+const modalBackdrop: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.35)",
+  display: "grid",
+  placeItems: "center",
+  padding: "var(--space-4)",
+  zIndex: 30,
+};
+
+const modalPanel: React.CSSProperties = {
+  width: "min(640px, 100%)",
+  maxHeight: "85vh",
   overflow: "auto",
   background: "var(--surface)",
   borderRadius: "var(--radius-lg)",
