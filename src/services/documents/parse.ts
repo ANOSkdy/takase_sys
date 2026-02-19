@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   documentDiffItems,
@@ -18,6 +18,7 @@ import { getStorageProvider } from "@/services/storage";
 import { parseInvoiceFromPdfPage } from "@/services/ai/gemini";
 import { parseInvoiceFromPdfPages } from "@/services/documents/pdf-pipeline";
 import { getMaxPdfPages } from "@/services/documents/constants";
+import { PDF_DEFAULT_CATEGORY, resolveCategory } from "@/services/documents/category";
 import { PROMPT_VERSION } from "@/services/ai/prompt";
 
 type ParseRunInsert = typeof documentParseRuns.$inferInsert;
@@ -45,8 +46,6 @@ type LineItemContext = {
   matchedProductSpec: string | null;
   matchedProductCategory: string | null;
 };
-
-const PDF_DEFAULT_CATEGORY = "未分類";
 
 type VendorPriceRow = {
   vendorPriceId: string;
@@ -158,7 +157,7 @@ function buildProductRow(input: {
     productKey: input.productKey,
     productName: input.productName,
     spec: input.spec,
-    category: PDF_DEFAULT_CATEGORY,
+    category: resolveCategory({ existing: null, incoming: null }),
     defaultUnitPrice: input.defaultUnitPrice,
     qualityFlag: input.qualityFlag,
     lastUpdatedAt: new Date(),
@@ -427,6 +426,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         .onConflictDoUpdate({
           target: productMaster.productKey,
           set: {
+            category: sql`COALESCE(NULLIF(NULLIF(excluded.category, ''), ${PDF_DEFAULT_CATEGORY}), ${productMaster.category})`,
             lastUpdatedAt: new Date(),
             lastSourceType: "PDF",
             lastSourceId: parseRunId,
