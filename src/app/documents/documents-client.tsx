@@ -30,6 +30,7 @@ type DeleteState = {
 type ParseState = {
   targetId: string;
   busy: boolean;
+  fileName?: string;
 };
 
 const jstDateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
@@ -204,8 +205,8 @@ export default function DocumentsClient({
     }
   };
 
-  const onParse = async (documentId: string) => {
-    setParseState({ targetId: documentId, busy: true });
+  const onParse = async (documentId: string, fileName: string) => {
+    setParseState({ targetId: documentId, busy: true, fileName });
     try {
       const res = await fetch(`/api/documents/${documentId}/parse`, { method: "POST" });
       if (!res.ok) {
@@ -287,7 +288,7 @@ export default function DocumentsClient({
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <button
                         style={btnPrimary}
-                        onClick={() => onParse(item.documentId)}
+                        onClick={() => onParse(item.documentId, item.fileName)}
                         disabled={item.status === "PARSING" || parseState?.busy}
                       >
                         解析
@@ -374,6 +375,19 @@ export default function DocumentsClient({
           </div>
         </div>
       )}
+
+      {parseState?.busy && (
+        <div style={modalBackdrop} role="status" aria-live="polite" aria-busy="true">
+          <div style={modalPanel}>
+            <h3 style={{ marginTop: 0 }}>解析を実行中です</h3>
+            <p style={{ color: "var(--muted)", marginBottom: 0 }}>
+              {parseState.fileName
+                ? `「${parseState.fileName}」を解析しています。完了までこのままお待ちください。`
+                : "PDFを解析しています。完了までこのままお待ちください。"}
+            </p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -431,6 +445,13 @@ function FileDropzone({
 }
 
 function StatusChip({ status }: { status: DocumentListItem["status"] }) {
+  const labelMap: Record<DocumentListItem["status"], string> = {
+    UPLOADED: "アップロード済み",
+    PARSING: "解析中",
+    PARSED: "解析完了",
+    FAILED: "解析失敗",
+    DELETED: "削除済み",
+  };
   const colorMap: Record<string, string> = {
     UPLOADED: "#2563eb",
     PARSING: "#f59e0b",
@@ -450,7 +471,7 @@ function StatusChip({ status }: { status: DocumentListItem["status"] }) {
         display: "inline-block",
       }}
     >
-      {status}
+      {labelMap[status]}
     </span>
   );
 }

@@ -58,6 +58,9 @@ export default async function DocumentDiffPage({
   return (
     <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
       <header style={{ display: "grid", gap: "var(--space-2)" }}>
+        <a href="/documents" style={backLinkStyle}>
+          ← 一覧へ戻る
+        </a>
         <h1 style={{ margin: 0 }}>差分結果</h1>
         <p style={{ margin: 0, color: "var(--muted)" }}>
           PDF解析の差分と自動更新の判定結果です。
@@ -208,6 +211,16 @@ const tabStyle: CSSProperties = {
   color: "inherit",
   textDecoration: "none",
   fontSize: 12,
+};
+
+const backLinkStyle: CSSProperties = {
+  width: "fit-content",
+  color: "var(--text)",
+  textDecoration: "none",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius-md)",
+  padding: "6px 10px",
+  fontSize: 13,
 };
 
 function Th({ children }: { children: ReactNode }) {
