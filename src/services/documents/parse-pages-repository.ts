@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { getSql } from "@/db/client";
+import { assertNoDateSqlParams } from "@/db/sql-params";
 import type { ParsedInvoice } from "@/services/ai/schema";
 
 const pageKeySchema = z.object({
@@ -14,8 +15,8 @@ const pagePatchSchema = z.object({
   errorSummary: z.string().max(500).nullable().optional(),
   stepId: z.string().max(255).nullable().optional(),
   attempt: z.number().int().positive().nullable().optional(),
-  startedAt: z.date().nullable().optional(),
-  finishedAt: z.date().nullable().optional(),
+  markStartedAt: z.boolean().optional(),
+  markFinishedAt: z.boolean().optional(),
 });
 
 export type ParsePageRow = {
@@ -35,11 +36,29 @@ export async function upsertDocumentParsePage(input: {
   const patch = pagePatchSchema.parse(input.patch);
   const sql = getSql();
 
+  const params = [
+    key.parseRunId,
+    key.pageNo,
+    patch.status,
+    patch.parsedJson ? JSON.stringify(patch.parsedJson) : null,
+    patch.errorSummary ?? null,
+    patch.stepId ?? null,
+    patch.attempt ?? null,
+    patch.markStartedAt ?? false,
+    patch.markFinishedAt ?? false,
+  ];
+
+  assertNoDateSqlParams(params, "upsertDocumentParsePage");
+
   await sql.unsafe(
     `
       INSERT INTO document_parse_pages (
         parse_run_id, page_no, status, parsed_json, error_summary, step_id, attempt, started_at, finished_at
-      ) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9)
+      ) VALUES (
+        $1,$2,$3,$4::jsonb,$5,$6,$7,
+        CASE WHEN $8::boolean THEN now() ELSE NULL END,
+        CASE WHEN $9::boolean THEN now() ELSE NULL END
+      )
       ON CONFLICT (parse_run_id, page_no)
       DO UPDATE SET
         status = EXCLUDED.status,
@@ -48,20 +67,10 @@ export async function upsertDocumentParsePage(input: {
         step_id = EXCLUDED.step_id,
         attempt = EXCLUDED.attempt,
         started_at = COALESCE(EXCLUDED.started_at, document_parse_pages.started_at),
-        finished_at = EXCLUDED.finished_at,
+        finished_at = COALESCE(EXCLUDED.finished_at, document_parse_pages.finished_at),
         updated_at = now()
     `,
-    [
-      key.parseRunId,
-      key.pageNo,
-      patch.status,
-      patch.parsedJson ? JSON.stringify(patch.parsedJson) : null,
-      patch.errorSummary ?? null,
-      patch.stepId ?? null,
-      patch.attempt ?? null,
-      patch.startedAt ?? null,
-      patch.finishedAt ?? null,
-    ],
+    params,
   );
 }
 

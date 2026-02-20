@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { FatalError, RetryableError, getStepMetadata } from "workflow";
 import { getDb } from "@/db/client";
 import { getEnv } from "@/config/env";
@@ -8,6 +8,7 @@ import { parseInvoiceFromPdfPage } from "@/services/ai/gemini";
 import type { ParsedInvoice } from "@/services/ai/schema";
 import { getMaxPdfPages } from "@/services/documents/constants";
 import { mergeParsedInvoices } from "@/services/documents/page-merge";
+import { toPgDateString } from "@/services/documents/pg-date";
 import { detectPdfPageCount } from "@/services/documents/pdf-pages";
 import {
   getDocumentParsePageStatus,
@@ -70,24 +71,25 @@ export async function parsePdfPageStep(
   pdfBase64: string,
 ): Promise<{ pageNo: number; status: "SUCCEEDED" | "FAILED" | "SKIPPED" }> {
   "use step";
-  const existingStatus = await getDocumentParsePageStatus({ parseRunId, pageNo });
-  if (existingStatus === "SUCCEEDED") {
-    return { pageNo, status: "SKIPPED" };
-  }
-
   const { stepId, attempt } = getStepMetadata();
-  await upsertDocumentParsePage({
-    parseRunId,
-    pageNo,
-    patch: { status: "RUNNING", stepId, attempt, startedAt: new Date(), errorSummary: null },
-  });
 
   try {
+    const existingStatus = await getDocumentParsePageStatus({ parseRunId, pageNo });
+    if (existingStatus === "SUCCEEDED") {
+      return { pageNo, status: "SKIPPED" };
+    }
+
+    await upsertDocumentParsePage({
+      parseRunId,
+      pageNo,
+      patch: { status: "RUNNING", stepId, attempt, markStartedAt: true, errorSummary: null },
+    });
+
     const parsed = await parseInvoiceFromPdfPage({ pdfBase64, pageNumber: pageNo, totalPages });
     await upsertDocumentParsePage({
       parseRunId,
       pageNo,
-      patch: { status: "SUCCEEDED", parsedJson: parsed, finishedAt: new Date(), stepId, attempt },
+      patch: { status: "SUCCEEDED", parsedJson: parsed, markFinishedAt: true, stepId, attempt },
     });
     return { pageNo, status: "SUCCEEDED" };
   } catch (error) {
@@ -95,17 +97,26 @@ export async function parsePdfPageStep(
       throw new RetryableError("PAGE_PARSE_RETRY", { retryAfter: "30s" });
     }
 
-    await upsertDocumentParsePage({
-      parseRunId,
-      pageNo,
-      patch: {
-        status: "FAILED",
-        errorSummary: error instanceof Error ? error.message.slice(0, 500) : "PAGE_PARSE_FAILED",
-        finishedAt: new Date(),
-        stepId,
-        attempt,
-      },
-    });
+    try {
+      await upsertDocumentParsePage({
+        parseRunId,
+        pageNo,
+        patch: {
+          status: "FAILED",
+          errorSummary: error instanceof Error ? error.message.slice(0, 500) : "PAGE_PARSE_FAILED",
+          markFinishedAt: true,
+          stepId,
+          attempt,
+        },
+      });
+    } catch (persistError) {
+      console.error("PAGE_FAILURE_PERSIST_ERROR", {
+        parseRunId,
+        pageNo,
+        reason: persistError instanceof Error ? persistError.message : "UNKNOWN",
+      });
+    }
+
     return { pageNo, status: "FAILED" };
   }
 }
@@ -168,7 +179,7 @@ export async function mergeFinalizeStep(
       .update(documentParseRuns)
       .set({
         status: runStatus,
-        finishedAt: new Date(),
+        finishedAt: sql`now()`,
         stats: {
           pageCount: input.pageCount,
           processedPages: input.processedPages,
@@ -187,7 +198,7 @@ export async function mergeFinalizeStep(
       .set({
         status: documentStatus,
         vendorName: merged.vendorName,
-        invoiceDate: merged.invoiceDate,
+        invoiceDate: toPgDateString(merged.invoiceDate),
         parseErrorSummary,
       })
       .where(and(eq(documents.documentId, input.documentId), eq(documents.isDeleted, false)));
