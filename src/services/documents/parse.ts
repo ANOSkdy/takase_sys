@@ -62,7 +62,7 @@ type DocumentRow = {
 
 export type ParseDocumentResult = {
   parseRunId: string;
-  status: "SUCCEEDED" | "FAILED";
+  status: "SUCCEEDED" | "PARTIAL" | "FAILED";
 };
 
 function buildParseRunRow(input: {

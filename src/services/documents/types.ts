@@ -1,4 +1,20 @@
 export type DocumentStatus = "UPLOADED" | "PARSING" | "PARSED" | "PARSED_PARTIAL" | "FAILED" | "DELETED";
+export type ParseRunStatus = "RUNNING" | "SUCCEEDED" | "PARTIAL" | "FAILED";
+
+export type ParseRunStats = {
+  processedPages?: number;
+  succeededPages?: number;
+  failedPages?: number;
+  failedPageNos?: number[];
+};
+
+export function isDocumentParseCompleted(status: DocumentStatus): boolean {
+  return status === "PARSED" || status === "PARSED_PARTIAL" || status === "FAILED" || status === "DELETED";
+}
+
+export function isParseRunCompleted(status: ParseRunStatus): boolean {
+  return status === "SUCCEEDED" || status === "PARTIAL" || status === "FAILED";
+}
 
 export type DocumentListItem = {
   documentId: string;
@@ -19,9 +35,10 @@ export type DocumentDetail = DocumentListItem & {
   deletedReason: string | null;
   latestParseRun?: {
     parseRunId: string;
-    status: string;
+    status: ParseRunStatus;
     startedAt: string;
     finishedAt: string | null;
+    stats: ParseRunStats | null;
     errorDetail: string | null;
   } | null;
 };
