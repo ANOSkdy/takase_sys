@@ -293,6 +293,9 @@ export default function DocumentsClient({
                       >
                         解析
                       </button>
+                      <a href={`/documents/${item.documentId}`} style={btnLink}>
+                        詳細
+                      </a>
                       <a href={`/documents/${item.documentId}/diff`} style={btnLink}>
                         差分
                       </a>
@@ -449,7 +452,7 @@ function StatusChip({ status }: { status: DocumentListItem["status"] }) {
     UPLOADED: "アップロード済み",
     PARSING: "解析中",
     PARSED: "解析完了",
-    PARSED_PARTIAL: "一部解析",
+    PARSED_PARTIAL: "解析一部失敗",
     FAILED: "解析失敗",
     DELETED: "削除済み",
   };
@@ -457,7 +460,7 @@ function StatusChip({ status }: { status: DocumentListItem["status"] }) {
     UPLOADED: "#2563eb",
     PARSING: "#f59e0b",
     PARSED: "#16a34a",
-    PARSED_PARTIAL: "#0ea5e9",
+    PARSED_PARTIAL: "#d97706",
     FAILED: "#dc2626",
     DELETED: "#6b7280",
   };

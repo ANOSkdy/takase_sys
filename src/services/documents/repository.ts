@@ -6,6 +6,8 @@ import type {
   DocumentDiffItem,
   DocumentLineItem,
   DocumentListItem,
+  ParseRunStats,
+  ParseRunStatus,
   RegisterDocumentInput,
   RegisterDocumentResult,
   SoftDeleteResult,
@@ -23,6 +25,18 @@ function toDateString(value: Date | string | null): string | null {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return typeof value === "string" ? value : null;
   return date.toISOString().slice(0, 10);
+}
+
+function toParseRunStats(value: Record<string, unknown> | null | undefined): ParseRunStats | null {
+  if (!value) return null;
+  return {
+    processedPages: typeof value.processedPages === "number" ? value.processedPages : undefined,
+    succeededPages: typeof value.succeededPages === "number" ? value.succeededPages : undefined,
+    failedPages: typeof value.failedPages === "number" ? value.failedPages : undefined,
+    failedPageNos: Array.isArray(value.failedPageNos)
+      ? value.failedPageNos.filter((pageNo): pageNo is number => typeof pageNo === "number")
+      : undefined,
+  };
 }
 
 export async function listDocuments(): Promise<DocumentListItem[]> {
@@ -82,6 +96,7 @@ export async function getDocumentDetail(documentId: string): Promise<DocumentDet
       status: documentParseRuns.status,
       startedAt: documentParseRuns.startedAt,
       finishedAt: documentParseRuns.finishedAt,
+      stats: documentParseRuns.stats,
       errorDetail: documentParseRuns.errorDetail,
     })
     .from(documentParseRuns)
@@ -106,9 +121,10 @@ export async function getDocumentDetail(documentId: string): Promise<DocumentDet
     latestParseRun: latestRun
       ? {
           parseRunId: latestRun.parseRunId,
-          status: latestRun.status,
+          status: latestRun.status as ParseRunStatus,
           startedAt: toIsoString(latestRun.startedAt) ?? "",
           finishedAt: toIsoString(latestRun.finishedAt),
+          stats: toParseRunStats(latestRun.stats),
           errorDetail: latestRun.errorDetail ?? null,
         }
       : null,
