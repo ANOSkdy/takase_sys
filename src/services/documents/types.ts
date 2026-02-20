@@ -1,4 +1,4 @@
-export type DocumentStatus = "UPLOADED" | "PARSING" | "PARSED" | "FAILED" | "DELETED";
+export type DocumentStatus = "UPLOADED" | "PARSING" | "PARSED" | "PARSED_PARTIAL" | "FAILED" | "DELETED";
 
 export type DocumentListItem = {
   documentId: string;

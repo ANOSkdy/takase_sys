@@ -1,0 +1,20 @@
+{
+  "name": "workflow",
+  "version": "0.0.0-local",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./api": {
+      "types": "./api.d.ts",
+      "default": "./api.js"
+    },
+    "./next": {
+      "types": "./next.d.ts",
+      "default": "./next.js"
+    }
+  },
+  "types": "./index.d.ts"
+}
