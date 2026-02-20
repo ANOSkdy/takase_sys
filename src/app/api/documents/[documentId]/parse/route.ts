@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { start } from "workflow/api";
 import { z } from "zod";
 import { problemResponse } from "@/app/api/_utils/problem";
@@ -39,6 +39,23 @@ export async function POST(
     const model = env.GEMINI_MODEL && env.GEMINI_MODEL.trim() ? env.GEMINI_MODEL : "gemini-1.5-flash";
 
     const db = getDb();
+
+    const [runningParseRun] = await db
+      .select({ parseRunId: documentParseRuns.parseRunId })
+      .from(documentParseRuns)
+      .where(
+        and(
+          eq(documentParseRuns.documentId, documentId),
+          eq(documentParseRuns.status, "RUNNING"),
+        ),
+      )
+      .orderBy(desc(documentParseRuns.startedAt))
+      .limit(1);
+
+    if (runningParseRun) {
+      return NextResponse.json({ parseRunId: runningParseRun.parseRunId, status: "RUNNING" }, { status: 202 });
+    }
+
     await db.transaction(async (tx) => {
       await tx.insert(documentParseRuns).values({
         parseRunId,
@@ -56,7 +73,40 @@ export async function POST(
         .where(eq(documents.documentId, documentId));
     });
 
-    await start(runDocumentParseWorkflow, [parseRunId]);
+    try {
+      await start(runDocumentParseWorkflow, [parseRunId]);
+      console.info("[documents] parse workflow enqueued", { documentId, parseRunId });
+    } catch {
+      console.error("[documents] parse workflow enqueue failed", { documentId, parseRunId, ok: false });
+      try {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(documentParseRuns)
+            .set({
+              status: "FAILED",
+              finishedAt: new Date(),
+              errorDetail: "WORKFLOW_START_FAILED",
+            })
+            .where(eq(documentParseRuns.parseRunId, parseRunId));
+
+          await tx
+            .update(documents)
+            .set({
+              status: "FAILED",
+              parseErrorSummary: "WORKFLOW_START_FAILED",
+            })
+            .where(eq(documents.documentId, documentId));
+        });
+      } catch {
+        console.error("[documents] failed to persist workflow enqueue failure", {
+          documentId,
+          parseRunId,
+          ok: false,
+        });
+      }
+
+      return problemResponse(503, "Service Unavailable", "WORKFLOW_START_FAILED");
+    }
 
     return NextResponse.json({ parseRunId, status: "RUNNING" }, { status: 202 });
   } catch (err) {
