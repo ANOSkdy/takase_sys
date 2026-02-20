@@ -449,6 +449,7 @@ function StatusChip({ status }: { status: DocumentListItem["status"] }) {
     UPLOADED: "アップロード済み",
     PARSING: "解析中",
     PARSED: "解析完了",
+    PARSED_PARTIAL: "一部解析",
     FAILED: "解析失敗",
     DELETED: "削除済み",
   };
@@ -456,6 +457,7 @@ function StatusChip({ status }: { status: DocumentListItem["status"] }) {
     UPLOADED: "#2563eb",
     PARSING: "#f59e0b",
     PARSED: "#16a34a",
+    PARSED_PARTIAL: "#0ea5e9",
     FAILED: "#dc2626",
     DELETED: "#6b7280",
   };

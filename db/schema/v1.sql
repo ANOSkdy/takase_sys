@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS documents (
   storage_key text NOT NULL,
   uploaded_at timestamptz NOT NULL DEFAULT now(),
   upload_note text,                            -- 任意入力（アップロード者メモ）
-  status text NOT NULL DEFAULT 'UPLOADED',      -- UPLOADED/PARSING/PARSED/FAILED/DELETED
+  status text NOT NULL DEFAULT 'UPLOADED',      -- UPLOADED/PARSING/PARSED/PARSED_PARTIAL/FAILED/DELETED
   vendor_name text,
   invoice_date date,
   parse_error_summary text,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS documents (
   deleted_at timestamptz,
   deleted_reason text,
   CONSTRAINT chk_documents_status
-    CHECK (status IN ('UPLOADED','PARSING','PARSED','FAILED','DELETED'))
+    CHECK (status IN ('UPLOADED','PARSING','PARSED','PARSED_PARTIAL','FAILED','DELETED'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_documents_status
@@ -99,17 +99,40 @@ CREATE TABLE IF NOT EXISTS document_parse_runs (
   document_id uuid NOT NULL REFERENCES documents(document_id),
   started_at timestamptz NOT NULL DEFAULT now(),
   finished_at timestamptz,
-  status text NOT NULL DEFAULT 'RUNNING',       -- RUNNING/SUCCEEDED/FAILED
+  status text NOT NULL DEFAULT 'RUNNING',       -- RUNNING/SUCCEEDED/PARTIAL/FAILED
   model text NOT NULL,                          -- gemini-3-flash-...
   prompt_version text NOT NULL,                 -- v1, v2...
   stats jsonb NOT NULL DEFAULT '{}'::jsonb,      -- 件数/低信頼数/未突合数など
   error_detail text,
   CONSTRAINT chk_parse_runs_status
-    CHECK (status IN ('RUNNING','SUCCEEDED','FAILED'))
+    CHECK (status IN ('RUNNING','SUCCEEDED','PARTIAL','FAILED'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_parse_runs_doc
   ON document_parse_runs (document_id, started_at DESC);
+
+
+-- =========================================================
+-- 4.5) document_parse_pages（ページ単位の永続化）
+-- =========================================================
+CREATE TABLE IF NOT EXISTS document_parse_pages (
+  parse_run_id uuid NOT NULL REFERENCES document_parse_runs(parse_run_id),
+  page_no int NOT NULL,
+  status text NOT NULL DEFAULT 'RUNNING',
+  parsed_json jsonb,
+  error_summary text,
+  step_id text,
+  attempt int,
+  started_at timestamptz,
+  finished_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (parse_run_id, page_no),
+  CONSTRAINT chk_parse_pages_status
+    CHECK (status IN ('RUNNING','SUCCEEDED','FAILED','SKIPPED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_parse_pages_parse_run
+  ON document_parse_pages (parse_run_id, page_no);
 
 -- =========================================================
 -- 5) document_line_items（抽出明細）
@@ -206,12 +229,12 @@ CREATE TABLE IF NOT EXISTS excel_import_runs (
   file_hash text NOT NULL,
   started_at timestamptz NOT NULL DEFAULT now(),
   finished_at timestamptz,
-  status text NOT NULL DEFAULT 'RUNNING',       -- RUNNING/SUCCEEDED/FAILED
+  status text NOT NULL DEFAULT 'RUNNING',       -- RUNNING/SUCCEEDED/PARTIAL/FAILED
   stats jsonb NOT NULL DEFAULT '{}'::jsonb,
   error_detail text,
 
   CONSTRAINT chk_excel_import_status
-    CHECK (status IN ('RUNNING','SUCCEEDED','FAILED'))
+    CHECK (status IN ('RUNNING','SUCCEEDED','PARTIAL','FAILED'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_excel_import_runs_started_at
