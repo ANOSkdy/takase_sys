@@ -21,8 +21,6 @@ type UploadItem = {
 
 type DeleteState = {
   target: DocumentListItem;
-  confirmName: string;
-  deletedReason: string;
   busy: boolean;
   error?: string;
 };
@@ -181,10 +179,6 @@ export default function DocumentsClient({
     try {
       const res = await fetch(`/api/documents/${deleteState.target.documentId}`, {
         method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          deletedReason: deleteState.deletedReason.trim() || undefined,
-        }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -301,8 +295,6 @@ export default function DocumentsClient({
                         onClick={() =>
                           setDeleteState({
                             target: item,
-                            confirmName: "",
-                            deletedReason: "",
                             busy: false,
                           })
                         }
@@ -330,46 +322,17 @@ export default function DocumentsClient({
           <div style={modalPanel}>
             <h3>削除の確認</h3>
             <p style={{ color: "var(--muted)" }}>
-              「{deleteState.target.fileName}」を削除します。ファイル名を入力して確認してください。
+              「{deleteState.target.fileName}」を本当に削除しますか？
             </p>
-
-            <div style={{ display: "grid", gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
-              <label style={labelStyle}>ファイル名の再入力</label>
-              <input
-                value={deleteState.confirmName}
-                onChange={(e) =>
-                  setDeleteState((prev) => (prev ? { ...prev, confirmName: e.target.value } : prev))
-                }
-                style={inputStyle}
-              />
-            </div>
-
-            <div style={{ display: "grid", gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
-              <label style={labelStyle}>削除理由（任意）</label>
-              <textarea
-                value={deleteState.deletedReason}
-                onChange={(e) =>
-                  setDeleteState((prev) =>
-                    prev ? { ...prev, deletedReason: e.target.value } : prev,
-                  )
-                }
-                rows={2}
-                style={textareaStyle}
-              />
-            </div>
 
             {deleteState.error && <p style={{ color: "var(--color-danger)" }}>{deleteState.error}</p>}
 
             <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
               <button style={btnSecondary} onClick={() => setDeleteState(null)} disabled={deleteState.busy}>
-                キャンセル
+                いいえ
               </button>
-              <button
-                style={btnDanger}
-                onClick={onDelete}
-                disabled={deleteState.busy || deleteState.confirmName !== deleteState.target.fileName}
-              >
-                削除する
+              <button style={btnDanger} onClick={onDelete} disabled={deleteState.busy}>
+                はい
               </button>
             </div>
           </div>
@@ -512,15 +475,6 @@ const dropzoneStyle: CSSProperties = {
   placeItems: "center",
   cursor: "pointer",
   background: "rgba(0,0,0,0.02)",
-};
-
-const inputStyle: CSSProperties = {
-  height: 40,
-  borderRadius: "var(--radius-md)",
-  border: "1px solid var(--border)",
-  padding: "0 12px",
-  outline: "none",
-  background: "var(--surface)",
 };
 
 const textareaStyle: CSSProperties = {
