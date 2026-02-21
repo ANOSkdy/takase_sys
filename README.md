@@ -28,7 +28,7 @@
 ## Runtime configuration
 
 - `APP_MAX_PDF_MB` : アップロード可能なPDFサイズ上限（MB、既定20）
-- `APP_MAX_PDF_PAGES` : 1回の解析で処理するPDFページ上限（既定30）
+- `APP_MAX_PDF_PAGES` : 1回の解析で生成・処理するページアセット数の上限（既定30）
 
 ## Notes
 

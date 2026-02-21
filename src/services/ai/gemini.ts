@@ -74,7 +74,6 @@ function normalizeJsonSchema(schema: unknown): unknown {
 
 async function requestInvoiceParse(input: {
   pdfBase64: string;
-  pageInstruction?: string;
 }): Promise<ParsedInvoice> {
   const env = getEnv();
   const apiKey = requireEnv(env.GEMINI_API_KEY, "GEMINI_API_KEY");
@@ -90,7 +89,7 @@ async function requestInvoiceParse(input: {
       {
         role: "user",
         parts: [
-          { text: input.pageInstruction ? `${SYSTEM_PROMPT}\n\n${input.pageInstruction}` : SYSTEM_PROMPT },
+          { text: SYSTEM_PROMPT },
           {
             inline_data: {
               mime_type: "application/pdf",
@@ -149,15 +148,10 @@ async function requestInvoiceParse(input: {
 }
 
 
-export async function parseInvoiceFromPdf(pdfBase64: string): Promise<ParsedInvoice> {
-  return requestInvoiceParse({ pdfBase64 });
-}
-
-export async function parseInvoiceFromPdfPage(input: {
-  pdfBase64: string;
-  pageNumber: number;
-  totalPages: number;
+export async function parseSinglePage(input: {
+  pageBytesBase64: string;
+  pageNo?: number;
+  processedPages?: number;
 }): Promise<ParsedInvoice> {
-  const pageInstruction = `Extract line items only from page ${input.pageNumber} of ${input.totalPages}. If the page has no invoice lines, return lineItems as an empty array.`;
-  return requestInvoiceParse({ pdfBase64: input.pdfBase64, pageInstruction });
+  return requestInvoiceParse({ pdfBase64: input.pageBytesBase64 });
 }

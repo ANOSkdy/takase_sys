@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { headers } from "next/headers";
 import type { CSSProperties, ReactNode } from "react";
 import type { DocumentDiffItem, DocumentLineItem } from "@/services/documents/types";
@@ -58,9 +59,9 @@ export default async function DocumentDiffPage({
   return (
     <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
       <header style={{ display: "grid", gap: "var(--space-2)" }}>
-        <a href="/documents" style={backLinkStyle}>
+        <Link href="/documents" style={backLinkStyle}>
           ← 一覧へ戻る
-        </a>
+        </Link>
         <h1 style={{ margin: 0 }}>差分結果</h1>
         <p style={{ margin: 0, color: "var(--muted)" }}>
           PDF解析の差分と自動更新の判定結果です。

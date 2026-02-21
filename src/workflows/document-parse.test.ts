@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getDocumentParsePageStatus = vi.fn();
 const upsertDocumentParsePage = vi.fn();
-const parseInvoiceFromPdfPage = vi.fn();
+const parseSinglePage = vi.fn();
 
 vi.mock("workflow", () => ({
   FatalError: class FatalError extends Error {},
@@ -19,7 +19,7 @@ vi.mock("@/services/documents/parse-pages-repository", () => ({
 }));
 
 vi.mock("@/services/ai/gemini", () => ({
-  parseInvoiceFromPdfPage,
+  parseSinglePage,
 }));
 
 vi.mock("@/db/client", () => ({
@@ -34,14 +34,14 @@ describe("parsePdfPageStep", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getDocumentParsePageStatus.mockResolvedValue(null);
-    parseInvoiceFromPdfPage.mockResolvedValue({ vendorName: null, invoiceDate: null, lineItems: [] });
+    parseSinglePage.mockResolvedValue({ vendorName: null, invoiceDate: null, lineItems: [] });
     upsertDocumentParsePage.mockResolvedValue(undefined);
   });
 
   it("persists RUNNING page status before Gemini parsing", async () => {
     const { parsePdfPageStep } = await import("@/workflows/document-parse");
 
-    await parsePdfPageStep("dd655ae9-02a0-46c3-aa24-3e10465654dc", 1, 16, "base64");
+    await parsePdfPageStep("dd655ae9-02a0-46c3-aa24-3e10465654dc", 1, "base64");
 
     expect(upsertDocumentParsePage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -50,7 +50,7 @@ describe("parsePdfPageStep", () => {
         patch: expect.objectContaining({ status: "RUNNING", markStartedAt: true }),
       }),
     );
-    expect(parseInvoiceFromPdfPage).toHaveBeenCalledTimes(1);
-    expect(upsertDocumentParsePage.mock.invocationCallOrder[0]).toBeLessThan(parseInvoiceFromPdfPage.mock.invocationCallOrder[0]);
+    expect(parseSinglePage).toHaveBeenCalledTimes(1);
+    expect(upsertDocumentParsePage.mock.invocationCallOrder[0]).toBeLessThan(parseSinglePage.mock.invocationCallOrder[0]);
   });
 });
