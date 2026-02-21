@@ -21,6 +21,34 @@ export async function POST(
   _req: Request,
   context: { params: Promise<{ documentId: string }> },
 ) {
+  let failedStartContext: { parseRunId: string; documentId: string } | null = null;
+
+  const persistFailedParseStart = async (
+    input: { parseRunId: string; documentId: string },
+    db = getDb(),
+  ) => {
+    const { parseRunId, documentId } = input;
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(documentParseRuns)
+        .set({
+          status: "FAILED",
+          finishedAt: sql`now()`,
+          errorDetail: "WORKFLOW_START_FAILED",
+        })
+        .where(eq(documentParseRuns.parseRunId, parseRunId));
+
+      await tx
+        .update(documents)
+        .set({
+          status: "FAILED",
+          parseErrorSummary: "WORKFLOW_START_FAILED",
+        })
+        .where(eq(documents.documentId, documentId));
+    });
+  };
+
   const parsedParams = paramsSchema.safeParse(await context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid documentId", parsedParams.error.flatten());
@@ -73,30 +101,15 @@ export async function POST(
         .where(eq(documents.documentId, documentId));
     });
 
+    failedStartContext = { parseRunId, documentId };
+
     try {
       await start(runDocumentParseWorkflow, [parseRunId]);
       console.info("[documents] parse workflow enqueued", { documentId, parseRunId });
     } catch {
       console.error("[documents] parse workflow enqueue failed", { documentId, parseRunId, ok: false });
       try {
-        await db.transaction(async (tx) => {
-          await tx
-            .update(documentParseRuns)
-            .set({
-              status: "FAILED",
-              finishedAt: sql`now()`,
-              errorDetail: "WORKFLOW_START_FAILED",
-            })
-            .where(eq(documentParseRuns.parseRunId, parseRunId));
-
-          await tx
-            .update(documents)
-            .set({
-              status: "FAILED",
-              parseErrorSummary: "WORKFLOW_START_FAILED",
-            })
-            .where(eq(documents.documentId, documentId));
-        });
+        await persistFailedParseStart({ parseRunId, documentId }, db);
       } catch {
         console.error("[documents] failed to persist workflow enqueue failure", {
           documentId,
@@ -111,6 +124,18 @@ export async function POST(
     return NextResponse.json({ parseRunId, status: "RUNNING" }, { status: 202 });
   } catch (err) {
     console.error("[documents] parse failed", err);
+
+    try {
+      if (failedStartContext) {
+        await persistFailedParseStart(failedStartContext);
+      }
+    } catch {
+      console.error("[documents] failed to persist parse start failure", {
+        documentId: failedStartContext?.documentId,
+        parseRunId: failedStartContext?.parseRunId,
+        ok: false,
+      });
+    }
 
     const msg = err instanceof Error ? err.message : String(err);
     const detail = process.env.NODE_ENV === "development" ? msg : "Failed to start parse workflow";

@@ -54,10 +54,31 @@ function buildPageAssetStorageKey(documentId: string, pageNo: number): string {
   return `documents/${documentId}/pages/page-${pageNo}.pdf`;
 }
 
-async function preparePageAssetsStep(input: { documentId: string; storageKey: string }) {
+async function preparePageAssetsStep(input: { parseRunId: string; documentId: string; storageKey: string }) {
   "use step";
-  const pdfBytes = await getObjectBytes(input.storageKey);
-  const { pageCount, processedPages, pages } = await splitPdfToSinglePages(pdfBytes, getMaxPdfPages());
+  const db = getDb();
+
+  let pageCount = 0;
+  let processedPages = 0;
+  let pages: Awaited<ReturnType<typeof splitPdfToSinglePages>>["pages"] = [];
+
+  try {
+    const pdfBytes = await getObjectBytes(input.storageKey);
+    ({ pageCount, processedPages, pages } = await splitPdfToSinglePages(pdfBytes, getMaxPdfPages()));
+  } catch {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(documentParseRuns)
+        .set({ status: "FAILED", finishedAt: sql`now()`, errorDetail: "PDF_SPLIT_FAILED" })
+        .where(eq(documentParseRuns.parseRunId, input.parseRunId));
+
+      await tx
+        .update(documents)
+        .set({ status: "FAILED", parseErrorSummary: "PDF_SPLIT_FAILED" })
+        .where(and(eq(documents.documentId, input.documentId), eq(documents.isDeleted, false)));
+    });
+    throw new FatalError("PDF_SPLIT_FAILED");
+  }
 
   for (const page of pages) {
     const storageKey = buildPageAssetStorageKey(input.documentId, page.pageNo);
@@ -260,6 +281,7 @@ export async function runDocumentParseWorkflow(parseRunId: string) {
 
   try {
     const { pageCount, processedPages } = await preparePageAssetsStep({
+      parseRunId,
       documentId: context.documentId,
       storageKey: context.storageKey,
     });
