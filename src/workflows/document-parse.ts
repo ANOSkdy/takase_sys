@@ -58,23 +58,21 @@ function buildPageAssetStorageKey(documentId: string, pageNo: number): string {
 function mapPdfPrepareErrorCode(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (message.startsWith("PDF_FETCH_")) return message;
-  if (/PDF_LIB_|pdf-lib|PDFDocument\.load|Failed to parse PDF/i.test(message)) {
-    return "PDF_LIB_LOAD_FAILED";
-  }
-  return "PDF_SPLIT_FAILED";
+  if (message === "PDF_SPLIT_FAILED") return message;
+  return "PDF_LIB_LOAD_FAILED";
 }
 
-async function preparePageAssetsStep(input: { parseRunId: string; documentId: string; storageKey: string }) {
+export async function preparePageAssetsStep(input: { parseRunId: string; documentId: string; storageKey: string }) {
   "use step";
   const db = getDb();
 
   let pageCount = 0;
   let processedPages = 0;
   let pages: Awaited<ReturnType<typeof splitPdfToSinglePages>>["pages"] = [];
+  let pdfBytes: Buffer;
 
   try {
-    const pdfBytes = await getPdfBytesFromStorageKey(input.storageKey);
-    ({ pageCount, processedPages, pages } = await splitPdfToSinglePages(pdfBytes, getMaxPdfPages()));
+    pdfBytes = await getPdfBytesFromStorageKey(input.storageKey);
   } catch (error) {
     const errorCode = mapPdfPrepareErrorCode(error);
     await db.transaction(async (tx) => {
@@ -88,7 +86,37 @@ async function preparePageAssetsStep(input: { parseRunId: string; documentId: st
         .set({ status: "FAILED", parseErrorSummary: errorCode })
         .where(and(eq(documents.documentId, input.documentId), eq(documents.isDeleted, false)));
     });
-    throw new FatalError(errorCode);
+    return { pageCount: 0, processedPages: 0, shouldStop: true as const };
+  }
+
+  try {
+    ({ pageCount, processedPages, pages } = await splitPdfToSinglePages(pdfBytes, getMaxPdfPages()));
+  } catch (error) {
+    const errorCode = mapPdfPrepareErrorCode(error);
+    if (errorCode === "PDF_LIB_LOAD_FAILED") {
+      await upsertPageAsset(
+        input.documentId,
+        1,
+        input.storageKey,
+        createHash("sha256").update(pdfBytes).digest("hex"),
+        pdfBytes.byteLength,
+        "application/pdf",
+      );
+      return { pageCount: 1, processedPages: 1, isFallback: true as const };
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(documentParseRuns)
+        .set({ status: "FAILED", finishedAt: sql`now()`, errorDetail: errorCode })
+        .where(eq(documentParseRuns.parseRunId, input.parseRunId));
+
+      await tx
+        .update(documents)
+        .set({ status: "FAILED", parseErrorSummary: errorCode })
+        .where(and(eq(documents.documentId, input.documentId), eq(documents.isDeleted, false)));
+    });
+    return { pageCount: 0, processedPages: 0, shouldStop: true as const };
   }
 
   for (const page of pages) {
@@ -288,14 +316,20 @@ async function failParseRunStep(input: { parseRunId: string; documentId: string;
 
 export async function runDocumentParseWorkflow(parseRunId: string) {
   "use workflow";
-  const context = await loadParseContextStep(parseRunId);
+  let context: Awaited<ReturnType<typeof loadParseContextStep>> | null = null;
 
   try {
-    const { pageCount, processedPages } = await preparePageAssetsStep({
+    context = await loadParseContextStep(parseRunId);
+
+    const { pageCount, processedPages, shouldStop } = await preparePageAssetsStep({
       parseRunId,
       documentId: context.documentId,
       storageKey: context.storageKey,
     });
+
+    if (shouldStop) {
+      return { status: "FAILED" as const, documentStatus: "FAILED" as const };
+    }
 
     for (let pageNo = 1; pageNo <= processedPages; pageNo += 1) {
       await parsePdfPageStep(parseRunId, context.documentId, pageNo);
@@ -308,7 +342,9 @@ export async function runDocumentParseWorkflow(parseRunId: string) {
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message.slice(0, 500) : "PARSE_WORKFLOW_FAILED";
-    await failParseRunStep({ parseRunId, documentId: context.documentId, reason });
-    throw error;
+    if (context) {
+      await failParseRunStep({ parseRunId, documentId: context.documentId, reason });
+    }
+    return { status: "FAILED" as const, documentStatus: "FAILED" as const };
   }
 }

@@ -16,6 +16,22 @@ function assertPdfBuffer(pdfBytes: Buffer): void {
   }
 }
 
+function getPdfDiagnostics(pdfBytes: Buffer): {
+  byteLength: number;
+  first4: string;
+  hasPdfHeader: boolean;
+  hasEofMarker: boolean;
+} {
+  const first4 = pdfBytes.subarray(0, 4).toString("ascii");
+  const tail = pdfBytes.subarray(Math.max(0, pdfBytes.byteLength - 2048)).toString("ascii");
+  return {
+    byteLength: pdfBytes.byteLength,
+    first4,
+    hasPdfHeader: first4 === "%PDF",
+    hasEofMarker: tail.includes("%%EOF"),
+  };
+}
+
 export async function getPdfBytesFromStorageKey(storageKey: string): Promise<Buffer> {
   let pdfBytes: Buffer;
 
@@ -28,6 +44,9 @@ export async function getPdfBytesFromStorageKey(storageKey: string): Promise<Buf
   } else {
     pdfBytes = await getObjectBytes(storageKey);
   }
+
+  const diagnostics = getPdfDiagnostics(pdfBytes);
+  console.info("PDF_BYTES_DIAGNOSTICS", diagnostics);
 
   assertPdfBuffer(pdfBytes);
   return pdfBytes;

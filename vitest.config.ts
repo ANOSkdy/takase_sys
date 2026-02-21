@@ -12,6 +12,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
       "server-only": path.resolve(__dirname, "./src/test/server-only.ts"),
       "workflow": path.resolve(__dirname, "./vendor/workflow/index.js"),
+      "pdf-lib": path.resolve(__dirname, "./vendor/pdf-lib/index.js"),
     },
   },
 });
