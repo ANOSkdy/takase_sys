@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { start } from "workflow/api";
 import { z } from "zod";
 import { problemResponse } from "@/app/api/_utils/problem";
@@ -60,7 +60,7 @@ export async function POST(
       await tx.insert(documentParseRuns).values({
         parseRunId,
         documentId,
-        startedAt: new Date(),
+        startedAt: sql`now()`,
         status: "RUNNING",
         model,
         promptVersion: PROMPT_VERSION,
@@ -84,7 +84,7 @@ export async function POST(
             .update(documentParseRuns)
             .set({
               status: "FAILED",
-              finishedAt: new Date(),
+              finishedAt: sql`now()`,
               errorDetail: "WORKFLOW_START_FAILED",
             })
             .where(eq(documentParseRuns.parseRunId, parseRunId));

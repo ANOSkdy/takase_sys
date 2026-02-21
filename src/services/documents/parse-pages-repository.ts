@@ -23,7 +23,7 @@ export type ParsePageRow = {
   parseRunId: string;
   pageNo: number;
   status: string;
-  parsedJson: ParsedInvoice | null;
+  parsedJson: ParsedInvoice;
   errorSummary: string | null;
 };
 
@@ -40,7 +40,7 @@ export async function upsertDocumentParsePage(input: {
     key.parseRunId,
     key.pageNo,
     patch.status,
-    patch.parsedJson ? JSON.stringify(patch.parsedJson) : null,
+    JSON.stringify(patch.parsedJson ?? {}),
     patch.errorSummary ?? null,
     patch.stepId ?? null,
     patch.attempt ?? null,
@@ -55,14 +55,14 @@ export async function upsertDocumentParsePage(input: {
       INSERT INTO document_parse_pages (
         parse_run_id, page_no, status, parsed_json, error_summary, step_id, attempt, started_at, finished_at
       ) VALUES (
-        $1,$2,$3,$4::jsonb,$5,$6,$7,
+        $1,$2,$3,COALESCE($4::jsonb,'{}'::jsonb),$5,$6,$7,
         CASE WHEN $8::boolean THEN now() ELSE NULL END,
         CASE WHEN $9::boolean THEN now() ELSE NULL END
       )
       ON CONFLICT (parse_run_id, page_no)
       DO UPDATE SET
         status = EXCLUDED.status,
-        parsed_json = COALESCE(EXCLUDED.parsed_json, document_parse_pages.parsed_json),
+        parsed_json = COALESCE(EXCLUDED.parsed_json, document_parse_pages.parsed_json, '{}'::jsonb),
         error_summary = EXCLUDED.error_summary,
         step_id = EXCLUDED.step_id,
         attempt = EXCLUDED.attempt,
@@ -91,10 +91,10 @@ export async function listSucceededParsePages(parseRunId: string): Promise<Parse
   const runId = z.string().uuid().parse(parseRunId);
   const sql = getSql();
   const rows = await sql.unsafe<
-    { parse_run_id: string; page_no: number; status: string; parsed_json: ParsedInvoice | null; error_summary: string | null }[]
+    { parse_run_id: string; page_no: number; status: string; parsed_json: ParsedInvoice; error_summary: string | null }[]
   >(
     `
-      SELECT parse_run_id, page_no, status, parsed_json, error_summary
+      SELECT parse_run_id, page_no, status, COALESCE(parsed_json, '{}'::jsonb) AS parsed_json, error_summary
       FROM document_parse_pages
       WHERE parse_run_id = $1 AND status = 'SUCCEEDED'
       ORDER BY page_no ASC
