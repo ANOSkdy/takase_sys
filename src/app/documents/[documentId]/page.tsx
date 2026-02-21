@@ -30,10 +30,10 @@ export default async function DocumentDetailPage({
         <h1 style={{ margin: 0 }}>{doc.fileName}</h1>
       </header>
 
-      {doc.status === "PARSED_PARTIAL" && (doc.parseErrorSummary || latestStats) && (
+      {doc.status === "PARSED_PARTIAL" && (
         <section style={warningStyle}>
           <h2 style={{ margin: 0, fontSize: 18 }}>解析一部失敗</h2>
-          {doc.parseErrorSummary && <p style={{ margin: "8px 0 0" }}>{doc.parseErrorSummary}</p>}
+          <p style={{ margin: "8px 0 0" }}>{doc.parseErrorSummary ?? "一部ページの解析に失敗しました。"}</p>
           {latestStats && (
             <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
               <li>processedPages: {latestStats.processedPages ?? "-"}</li>
