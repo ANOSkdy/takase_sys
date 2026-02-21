@@ -1,0 +1,6 @@
+{
+  "name": "pdf-lib",
+  "version": "1.17.1",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

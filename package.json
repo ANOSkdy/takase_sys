@@ -23,12 +23,13 @@
         "@vercel/blob": "^2.0.1",
         "drizzle-orm": "^0.45.1",
         "next": "16.1.6",
+        "pdf-lib": "file:vendor/pdf-lib",
         "pg": "^8.18.0",
         "postgres": "^3.4.8",
         "react": "19.2.3",
         "react-dom": "19.2.3",
-        "zod": "^4.3.6",
-        "workflow": "file:vendor/workflow"
+        "workflow": "file:vendor/workflow",
+        "zod": "^4.3.6"
     },
     "devDependencies": {
         "@testing-library/jest-dom": "^6.9.1",
