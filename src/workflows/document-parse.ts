@@ -4,12 +4,10 @@ import { FatalError, RetryableError, getStepMetadata } from "workflow";
 import { getDb } from "@/db/client";
 import { getEnv } from "@/config/env";
 import { documentDiffItems, documentLineItems, documentParseRuns, documents } from "@/db/schema";
-import { parseInvoiceFromPdfPage } from "@/services/ai/gemini";
+import { parseSinglePage } from "@/services/ai/gemini";
 import type { ParsedInvoice } from "@/services/ai/schema";
-import { getMaxPdfPages } from "@/services/documents/constants";
 import { mergeParsedInvoices } from "@/services/documents/page-merge";
 import { toPgDateString } from "@/services/documents/pg-date";
-import { detectPdfPageCount } from "@/services/documents/pdf-pages";
 import {
   getDocumentParsePageStatus,
   listFailedPageNos,
@@ -44,7 +42,7 @@ async function loadParseContextStep(parseRunId: string) {
   return row;
 }
 
-async function fetchPdfAndCountStep(storageKey: string) {
+async function fetchPageAssetStep(storageKey: string) {
   "use step";
   const storage = getStorageProvider();
   if (!storage.getDownloadUrl) throw new FatalError("STORAGE_DOWNLOAD_NOT_SUPPORTED");
@@ -58,17 +56,14 @@ async function fetchPdfAndCountStep(storageKey: string) {
   if (!pdfResponse.ok) throw new FatalError("PDF_DOWNLOAD_FAILED");
 
   const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
-  const pageCount = detectPdfPageCount(pdfBuffer);
-  const processedPages = Math.min(pageCount, Math.max(1, getMaxPdfPages()));
 
-  return { pdfBase64: pdfBuffer.toString("base64"), pageCount, processedPages };
+  return { pageBytesBase64: pdfBuffer.toString("base64"), pageCount: 1, processedPages: 1 };
 }
 
 export async function parsePdfPageStep(
   parseRunId: string,
   pageNo: number,
-  totalPages: number,
-  pdfBase64: string,
+  pageBytesBase64: string,
 ): Promise<{ pageNo: number; status: "SUCCEEDED" | "FAILED" | "SKIPPED" }> {
   "use step";
   const { stepId, attempt } = getStepMetadata();
@@ -85,7 +80,7 @@ export async function parsePdfPageStep(
       patch: { status: "RUNNING", stepId, attempt, markStartedAt: true, errorSummary: null },
     });
 
-    const parsed = await parseInvoiceFromPdfPage({ pdfBase64, pageNumber: pageNo, totalPages });
+    const parsed = await parseSinglePage({ pageBytesBase64, pageNo });
     await upsertDocumentParsePage({
       parseRunId,
       pageNo,
@@ -215,11 +210,9 @@ export async function mergeFinalizeStep(
 export async function runDocumentParseWorkflow(parseRunId: string) {
   "use workflow";
   const context = await loadParseContextStep(parseRunId);
-  const { pdfBase64, pageCount, processedPages } = await fetchPdfAndCountStep(context.storageKey);
+  const { pageBytesBase64, pageCount, processedPages } = await fetchPageAssetStep(context.storageKey);
 
-  for (let pageNo = 1; pageNo <= processedPages; pageNo += 1) {
-    await parsePdfPageStep(parseRunId, pageNo, processedPages, pdfBase64);
-  }
+  await parsePdfPageStep(parseRunId, 1, pageBytesBase64);
 
   return mergeFinalizeStep(parseRunId, {
     pageCount,

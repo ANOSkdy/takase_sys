@@ -15,9 +15,7 @@ import { normalizeText, makeProductKey } from "@/domain/normalize";
 import { safeParseFloat, toNumericString } from "@/domain/pg-numeric";
 import { shouldBlockUpdate } from "@/domain/update-policy";
 import { getStorageProvider } from "@/services/storage";
-import { parseInvoiceFromPdfPage } from "@/services/ai/gemini";
-import { parseInvoiceFromPdfPages } from "@/services/documents/pdf-pipeline";
-import { getMaxPdfPages } from "@/services/documents/constants";
+import { parseSinglePage } from "@/services/ai/gemini";
 import { PDF_DEFAULT_CATEGORY, resolveCategory } from "@/services/documents/category";
 import { PROMPT_VERSION } from "@/services/ai/prompt";
 
@@ -286,14 +284,9 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       throw new Error("Failed to download PDF");
     }
     const buffer = Buffer.from(await pdfResponse.arrayBuffer());
-    const pageResult = await parseInvoiceFromPdfPages({
-      pdfBuffer: buffer,
-      maxPages: getMaxPdfPages(),
-      parsePage: parseInvoiceFromPdfPage,
-    });
-    invoiceData = pageResult.invoice;
-    pageCount = pageResult.pageCount;
-    processedPages = pageResult.processedPages;
+    invoiceData = await parseSinglePage({ pageBytesBase64: buffer.toString("base64") });
+    pageCount = 1;
+    processedPages = 1;
 
     console.info("document_parse_pages", {
       documentId,
