@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { documentDiffItems, documentLineItems, documentParseRuns, documents } from "@/db/schema";
 import type {
@@ -29,28 +29,62 @@ function toDateString(value: Date | string | null): string | null {
 
 export async function listDocuments(): Promise<DocumentListItem[]> {
   const db = getDb();
-  const rows = await db
-    .select({
-      documentId: documents.documentId,
-      fileName: documents.fileName,
-      uploadGroupId: documents.uploadGroupId,
-      pageNumber: documents.pageNumber,
-      pageTotal: documents.pageTotal,
-      sourceFileHash: documents.sourceFileHash,
-      uploadedAt: documents.uploadedAt,
-      status: documents.status,
-      vendorName: documents.vendorName,
-      invoiceDate: documents.invoiceDate,
-      uploadNote: documents.uploadNote,
-    })
-    .from(documents)
-    .where(eq(documents.isDeleted, false))
-    .orderBy(
-      desc(documents.uploadedAt),
-      documents.uploadGroupId,
-      documents.pageNumber,
-      documents.documentId,
-    );
+  const fetchRows = async () =>
+    db
+      .select({
+        documentId: documents.documentId,
+        fileName: documents.fileName,
+        uploadGroupId: documents.uploadGroupId,
+        pageNumber: documents.pageNumber,
+        pageTotal: documents.pageTotal,
+        sourceFileHash: documents.sourceFileHash,
+        uploadedAt: documents.uploadedAt,
+        status: documents.status,
+        vendorName: documents.vendorName,
+        invoiceDate: documents.invoiceDate,
+        uploadNote: documents.uploadNote,
+      })
+      .from(documents)
+      .where(eq(documents.isDeleted, false))
+      .orderBy(
+        desc(documents.uploadedAt),
+        documents.uploadGroupId,
+        documents.pageNumber,
+        documents.documentId,
+      );
+
+  const fetchLegacyRows = async () =>
+    db
+      .select({
+        documentId: documents.documentId,
+        fileName: documents.fileName,
+        uploadGroupId: sql<string | null>`null`.as("upload_group_id"),
+        pageNumber: sql<number | null>`null`.as("page_number"),
+        pageTotal: sql<number | null>`null`.as("page_total"),
+        sourceFileHash: sql<string | null>`null`.as("source_file_hash"),
+        uploadedAt: documents.uploadedAt,
+        status: documents.status,
+        vendorName: documents.vendorName,
+        invoiceDate: documents.invoiceDate,
+        uploadNote: documents.uploadNote,
+      })
+      .from(documents)
+      .where(eq(documents.isDeleted, false))
+      .orderBy(desc(documents.uploadedAt), documents.documentId);
+
+  let rows;
+  try {
+    rows = await fetchRows();
+  } catch (error) {
+    const isMissingColumn =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: string }).code === "42703";
+    if (!isMissingColumn) throw error;
+    console.warn("[documents] page metadata columns missing; falling back to legacy schema");
+    rows = await fetchLegacyRows();
+  }
 
   return rows.map((row) => ({
     documentId: row.documentId,

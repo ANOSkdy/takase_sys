@@ -11,6 +11,13 @@ const requiredTables = [
   "excel_import_runs",
 ];
 
+const requiredDocumentColumns = [
+  "upload_group_id",
+  "page_number",
+  "page_total",
+  "source_file_hash",
+];
+
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 if (!url) {
   console.error("DATABASE_URL(_UNPOOLED) is required to verify schema.");
@@ -33,7 +40,20 @@ try {
     process.exit(2);
   }
 
-  console.log("OK: required tables exist.");
+  const documentColumns = await sql`
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'documents'
+  `;
+  const columnSet = new Set(documentColumns.map((row) => row.column_name));
+  const missingColumns = requiredDocumentColumns.filter((column) => !columnSet.has(column));
+  if (missingColumns.length) {
+    console.error("Missing documents columns:", missingColumns.join(", "));
+    process.exit(3);
+  }
+
+  console.log("OK: required tables/columns exist.");
 } finally {
   await sql.end({ timeout: 5 });
 }

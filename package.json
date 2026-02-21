@@ -14,7 +14,7 @@
         "test": "vitest run",
         "test:ui": "vitest --ui",
         "db:generate": "node scripts/db/verify-schema.mjs",
-        "db:migrate": "node scripts/db/verify-schema.mjs",
+        "db:migrate": "node scripts/db/migrate.mjs",
         "db:deploy": "node scripts/db/verify-schema.mjs",
         "db:verify": "node scripts/db/verify-schema.mjs",
         "vercel-build": "node scripts/vercel-build.mjs"
