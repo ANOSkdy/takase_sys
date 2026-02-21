@@ -24,24 +24,24 @@ type BlobUploadUrlResponse = {
 };
 
 export class VercelBlobStorage implements StorageProvider {
-  async createUploadUrl(input: CreateUploadUrlInput): Promise<UploadUrlResult> {
+  private getAuthHeader(): string {
     const env = getEnv();
-    const token = requireEnv(env.BLOB_READ_WRITE_TOKEN, "BLOB_READ_WRITE_TOKEN");
+    return `Bearer ${requireEnv(env.BLOB_READ_WRITE_TOKEN, "BLOB_READ_WRITE_TOKEN")}`;
+  }
 
-    const payload = {
-      pathname: buildPathname(input.fileName),
-      contentType: input.contentType,
-      contentLength: input.size,
-      access: "private",
-    };
-
+  private async createRawUploadUrl(pathname: string, contentType: string, contentLength: number): Promise<string> {
     const response = await fetch(VERCEL_BLOB_API_BASE, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${token}`,
+        authorization: this.getAuthHeader(),
         "content-type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        pathname,
+        contentType,
+        contentLength,
+        access: "private",
+      }),
     });
 
     if (!response.ok) {
@@ -51,14 +51,16 @@ export class VercelBlobStorage implements StorageProvider {
 
     const data = (await response.json()) as BlobUploadUrlResponse;
     const uploadUrl = data.uploadUrl ?? data.url ?? data.blob?.url;
-    if (!uploadUrl) {
-      throw new Error("Upload URL response missing url");
-    }
+    if (!uploadUrl) throw new Error("Upload URL response missing url");
+    return uploadUrl;
+  }
 
-    const storageKey = data.pathname ?? data.blob?.pathname ?? uploadUrl;
-    const expiresAt = data.expiresAt
-      ? new Date(data.expiresAt).toISOString()
-      : new Date(Date.now() + (data.expiresIn ?? DEFAULT_UPLOAD_EXPIRES_MS)).toISOString();
+  async createUploadUrl(input: CreateUploadUrlInput): Promise<UploadUrlResult> {
+    const pathname = buildPathname(input.fileName);
+    const uploadUrl = await this.createRawUploadUrl(pathname, input.contentType, input.size);
+
+    const storageKey = pathname;
+    const expiresAt = new Date(Date.now() + DEFAULT_UPLOAD_EXPIRES_MS).toISOString();
 
     return { uploadUrl, storageKey, expiresAt };
   }
@@ -66,5 +68,29 @@ export class VercelBlobStorage implements StorageProvider {
   async getDownloadUrl(storageKey: string): Promise<string> {
     if (storageKey.startsWith("http")) return storageKey;
     return `${VERCEL_BLOB_API_BASE}/${storageKey}`;
+  }
+
+  async getObjectBytes(storageKey: string): Promise<Buffer> {
+    const url = await this.getDownloadUrl(storageKey);
+    const response = await fetch(url, {
+      headers: { authorization: this.getAuthHeader() },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to download object: ${response.status}`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
+
+  async putObjectBytes(storageKey: string, bytes: Buffer, options: { contentType: string }): Promise<void> {
+    const uploadUrl = await this.createRawUploadUrl(storageKey, options.contentType, bytes.byteLength);
+    const response = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "content-type": options.contentType },
+      body: new Uint8Array(bytes),
+    });
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Failed to upload object: ${response.status} ${text}`);
+    }
   }
 }

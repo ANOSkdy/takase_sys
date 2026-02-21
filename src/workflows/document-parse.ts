@@ -1,12 +1,18 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { FatalError, RetryableError, getStepMetadata } from "workflow";
 import { getDb } from "@/db/client";
-import { getEnv } from "@/config/env";
 import { documentDiffItems, documentLineItems, documentParseRuns, documents } from "@/db/schema";
+import { splitPdfToSinglePages } from "@/pdf/splitPdfToSinglePages";
 import { parseSinglePage } from "@/services/ai/gemini";
 import type { ParsedInvoice } from "@/services/ai/schema";
 import { mergeParsedInvoices } from "@/services/documents/page-merge";
+import {
+  listPageAssets,
+  upsertPageAsset,
+} from "@/services/documents/page-assets-repository";
+import { getMaxPdfPages } from "@/services/documents/constants";
 import { toPgDateString } from "@/services/documents/pg-date";
 import {
   getDocumentParsePageStatus,
@@ -14,7 +20,9 @@ import {
   listSucceededParsePages,
   upsertDocumentParsePage,
 } from "@/services/documents/parse-pages-repository";
-import { getStorageProvider } from "@/services/storage";
+import { getObjectBytes, putObjectBytes } from "@/services/storage";
+
+const EMPTY_PARSED_INVOICE: ParsedInvoice = { vendorName: null, invoiceDate: null, lineItems: [] };
 
 function isTransientError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -42,28 +50,47 @@ async function loadParseContextStep(parseRunId: string) {
   return row;
 }
 
-async function fetchPageAssetStep(storageKey: string) {
+function buildPageAssetStorageKey(documentId: string, pageNo: number): string {
+  return `documents/${documentId}/pages/page-${pageNo}.pdf`;
+}
+
+async function preparePageAssetsStep(input: { documentId: string; storageKey: string }) {
   "use step";
-  const storage = getStorageProvider();
-  if (!storage.getDownloadUrl) throw new FatalError("STORAGE_DOWNLOAD_NOT_SUPPORTED");
+  const pdfBytes = await getObjectBytes(input.storageKey);
+  const { pageCount, processedPages, pages } = await splitPdfToSinglePages(pdfBytes, getMaxPdfPages());
 
-  const env = getEnv();
-  const url = await storage.getDownloadUrl(storageKey);
-  const headers: Record<string, string> = {};
-  if (env.BLOB_READ_WRITE_TOKEN) headers.authorization = `Bearer ${env.BLOB_READ_WRITE_TOKEN}`;
+  for (const page of pages) {
+    const storageKey = buildPageAssetStorageKey(input.documentId, page.pageNo);
+    await putObjectBytes(storageKey, page.bytes, { contentType: "application/pdf" });
+    const pageHash = createHash("sha256").update(page.bytes).digest("hex");
+    await upsertPageAsset(
+      input.documentId,
+      page.pageNo,
+      storageKey,
+      pageHash,
+      page.bytes.byteLength,
+      "application/pdf",
+    );
+  }
 
-  const pdfResponse = await fetch(url, { headers });
-  if (!pdfResponse.ok) throw new FatalError("PDF_DOWNLOAD_FAILED");
+  return { pageCount, processedPages };
+}
 
-  const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
-
-  return { pageBytesBase64: pdfBuffer.toString("base64"), pageCount: 1, processedPages: 1 };
+async function fetchSinglePageBase64Step(input: { documentId: string; pageNo: number }): Promise<string> {
+  "use step";
+  const assets = await listPageAssets(input.documentId);
+  const asset = assets.find((row) => row.pageNo === input.pageNo);
+  if (!asset) {
+    throw new FatalError(`PAGE_ASSET_NOT_FOUND:${input.pageNo}`);
+  }
+  const bytes = await getObjectBytes(asset.storageKey);
+  return bytes.toString("base64");
 }
 
 export async function parsePdfPageStep(
   parseRunId: string,
+  documentId: string,
   pageNo: number,
-  pageBytesBase64: string,
 ): Promise<{ pageNo: number; status: "SUCCEEDED" | "FAILED" | "SKIPPED" }> {
   "use step";
   const { stepId, attempt } = getStepMetadata();
@@ -77,9 +104,10 @@ export async function parsePdfPageStep(
     await upsertDocumentParsePage({
       parseRunId,
       pageNo,
-      patch: { status: "RUNNING", stepId, attempt, markStartedAt: true, errorSummary: null },
+      patch: { status: "RUNNING", stepId, attempt, markStartedAt: true, errorSummary: null, parsedJson: EMPTY_PARSED_INVOICE },
     });
 
+    const pageBytesBase64 = await fetchSinglePageBase64Step({ documentId, pageNo });
     const parsed = await parseSinglePage({ pageBytesBase64, pageNo });
     await upsertDocumentParsePage({
       parseRunId,
@@ -98,6 +126,7 @@ export async function parsePdfPageStep(
         pageNo,
         patch: {
           status: "FAILED",
+          parsedJson: EMPTY_PARSED_INVOICE,
           errorSummary: error instanceof Error ? error.message.slice(0, 500) : "PAGE_PARSE_FAILED",
           markFinishedAt: true,
           stepId,
@@ -128,11 +157,12 @@ export async function mergeFinalizeStep(
   const succeededPages = await listSucceededParsePages(parseRunId);
   const failedPageNos = await listFailedPageNos(parseRunId);
 
-  const parsedPages = succeededPages
-    .map((row) => row.parsedJson)
-    .filter((row): row is ParsedInvoice => Boolean(row));
+  const parsedPages = succeededPages.map((row) => row.parsedJson).filter((row): row is ParsedInvoice => Boolean(row));
 
-  const merged = parsedPages.length > 0 ? mergeParsedInvoices(parsedPages) : { vendorName: null, invoiceDate: null, lineItems: [] };
+  const merged =
+    parsedPages.length > 0
+      ? mergeParsedInvoices(parsedPages)
+      : { vendorName: null, invoiceDate: null, lineItems: [] };
 
   await db.transaction(async (tx) => {
     await tx.delete(documentDiffItems).where(eq(documentDiffItems.parseRunId, parseRunId));
@@ -207,16 +237,45 @@ export async function mergeFinalizeStep(
   return { status, documentStatus };
 }
 
+
+async function failParseRunStep(input: { parseRunId: string; documentId: string; reason: string }) {
+  "use step";
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(documentParseRuns)
+      .set({ status: "FAILED", finishedAt: sql`now()`, errorDetail: input.reason })
+      .where(eq(documentParseRuns.parseRunId, input.parseRunId));
+
+    await tx
+      .update(documents)
+      .set({ status: "FAILED", parseErrorSummary: input.reason })
+      .where(and(eq(documents.documentId, input.documentId), eq(documents.isDeleted, false)));
+  });
+}
+
 export async function runDocumentParseWorkflow(parseRunId: string) {
   "use workflow";
   const context = await loadParseContextStep(parseRunId);
-  const { pageBytesBase64, pageCount, processedPages } = await fetchPageAssetStep(context.storageKey);
 
-  await parsePdfPageStep(parseRunId, 1, pageBytesBase64);
+  try {
+    const { pageCount, processedPages } = await preparePageAssetsStep({
+      documentId: context.documentId,
+      storageKey: context.storageKey,
+    });
 
-  return mergeFinalizeStep(parseRunId, {
-    pageCount,
-    processedPages,
-    documentId: context.documentId,
-  });
+    for (let pageNo = 1; pageNo <= processedPages; pageNo += 1) {
+      await parsePdfPageStep(parseRunId, context.documentId, pageNo);
+    }
+
+    return mergeFinalizeStep(parseRunId, {
+      pageCount,
+      processedPages,
+      documentId: context.documentId,
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message.slice(0, 500) : "PARSE_WORKFLOW_FAILED";
+    await failParseRunStep({ parseRunId, documentId: context.documentId, reason });
+    throw error;
+  }
 }
