@@ -21,6 +21,7 @@ import {
   upsertDocumentParsePage,
 } from "@/services/documents/parse-pages-repository";
 import { getObjectBytes, putObjectBytes } from "@/services/storage";
+import { getPdfBytesFromStorageKey } from "@/server/storage/getPdfBytes";
 
 const EMPTY_PARSED_INVOICE: ParsedInvoice = { vendorName: null, invoiceDate: null, lineItems: [] };
 
@@ -54,6 +55,15 @@ function buildPageAssetStorageKey(documentId: string, pageNo: number): string {
   return `documents/${documentId}/pages/page-${pageNo}.pdf`;
 }
 
+function mapPdfPrepareErrorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.startsWith("PDF_FETCH_")) return message;
+  if (/PDF_LIB_|pdf-lib|PDFDocument\.load|Failed to parse PDF/i.test(message)) {
+    return "PDF_LIB_LOAD_FAILED";
+  }
+  return "PDF_SPLIT_FAILED";
+}
+
 async function preparePageAssetsStep(input: { parseRunId: string; documentId: string; storageKey: string }) {
   "use step";
   const db = getDb();
@@ -63,21 +73,22 @@ async function preparePageAssetsStep(input: { parseRunId: string; documentId: st
   let pages: Awaited<ReturnType<typeof splitPdfToSinglePages>>["pages"] = [];
 
   try {
-    const pdfBytes = await getObjectBytes(input.storageKey);
+    const pdfBytes = await getPdfBytesFromStorageKey(input.storageKey);
     ({ pageCount, processedPages, pages } = await splitPdfToSinglePages(pdfBytes, getMaxPdfPages()));
-  } catch {
+  } catch (error) {
+    const errorCode = mapPdfPrepareErrorCode(error);
     await db.transaction(async (tx) => {
       await tx
         .update(documentParseRuns)
-        .set({ status: "FAILED", finishedAt: sql`now()`, errorDetail: "PDF_SPLIT_FAILED" })
+        .set({ status: "FAILED", finishedAt: sql`now()`, errorDetail: errorCode })
         .where(eq(documentParseRuns.parseRunId, input.parseRunId));
 
       await tx
         .update(documents)
-        .set({ status: "FAILED", parseErrorSummary: "PDF_SPLIT_FAILED" })
+        .set({ status: "FAILED", parseErrorSummary: errorCode })
         .where(and(eq(documents.documentId, input.documentId), eq(documents.isDeleted, false)));
     });
-    throw new FatalError("PDF_SPLIT_FAILED");
+    throw new FatalError(errorCode);
   }
 
   for (const page of pages) {
