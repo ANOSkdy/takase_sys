@@ -72,10 +72,7 @@ function normalizeJsonSchema(schema: unknown): unknown {
   return out;
 }
 
-async function requestInvoiceParse(input: {
-  pdfBase64: string;
-  pageInstruction?: string;
-}): Promise<ParsedInvoice> {
+async function requestInvoiceParse(input: { pdfBase64: string }): Promise<ParsedInvoice> {
   const env = getEnv();
   const apiKey = requireEnv(env.GEMINI_API_KEY, "GEMINI_API_KEY");
   const model = requireEnv(env.GEMINI_MODEL, "GEMINI_MODEL");
@@ -90,7 +87,7 @@ async function requestInvoiceParse(input: {
       {
         role: "user",
         parts: [
-          { text: input.pageInstruction ? `${SYSTEM_PROMPT}\n\n${input.pageInstruction}` : SYSTEM_PROMPT },
+          { text: `${SYSTEM_PROMPT}\nThe attached PDF is always exactly one page.` },
           {
             inline_data: {
               mime_type: "application/pdf",
@@ -108,15 +105,7 @@ async function requestInvoiceParse(input: {
     },
   };
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      // Prefer header auth for REST examples
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify(body),
-  });
+  const response = await fetchWithRetry(endpoint, apiKey, body);
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
@@ -148,16 +137,38 @@ async function requestInvoiceParse(input: {
   return parsed.data;
 }
 
+async function fetchWithRetry(endpoint: string, apiKey: string, body: unknown): Promise<Response> {
+  const maxRetries = 3;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (response.status !== 429 && response.status < 500) return response;
+      if (attempt === maxRetries) return response;
+    } catch (error) {
+      if (attempt === maxRetries) throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const backoffMs = 500 * 2 ** attempt;
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
+  }
+
+  throw new Error("GEMINI_API_RETRY_EXHAUSTED");
+}
+
 
 export async function parseInvoiceFromPdf(pdfBase64: string): Promise<ParsedInvoice> {
   return requestInvoiceParse({ pdfBase64 });
-}
-
-export async function parseInvoiceFromPdfPage(input: {
-  pdfBase64: string;
-  pageNumber: number;
-  totalPages: number;
-}): Promise<ParsedInvoice> {
-  const pageInstruction = `Extract line items only from page ${input.pageNumber} of ${input.totalPages}. If the page has no invoice lines, return lineItems as an empty array.`;
-  return requestInvoiceParse({ pdfBase64: input.pdfBase64, pageInstruction });
 }

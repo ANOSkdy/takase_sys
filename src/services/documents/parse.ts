@@ -15,9 +15,8 @@ import { normalizeText, makeProductKey } from "@/domain/normalize";
 import { safeParseFloat, toNumericString } from "@/domain/pg-numeric";
 import { shouldBlockUpdate } from "@/domain/update-policy";
 import { getStorageProvider } from "@/services/storage";
-import { parseInvoiceFromPdfPage } from "@/services/ai/gemini";
-import { parseInvoiceFromPdfPages } from "@/services/documents/pdf-pipeline";
-import { getMaxPdfPages } from "@/services/documents/constants";
+import { parseInvoiceFromPdf } from "@/services/ai/gemini";
+import { assertSinglePagePdf } from "@/services/documents/parse-guard";
 import { PDF_DEFAULT_CATEGORY, resolveCategory } from "@/services/documents/category";
 import { PROMPT_VERSION } from "@/services/ai/prompt";
 
@@ -269,8 +268,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
   });
 
   let invoiceData;
-  let pageCount = 1;
-  let processedPages = 1;
+  const pageCount = 1;
   try {
     const storage = getStorageProvider();
     if (!storage.getDownloadUrl) {
@@ -286,30 +284,31 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       throw new Error("Failed to download PDF");
     }
     const buffer = Buffer.from(await pdfResponse.arrayBuffer());
-    const pageResult = await parseInvoiceFromPdfPages({
-      pdfBuffer: buffer,
-      maxPages: getMaxPdfPages(),
-      parsePage: parseInvoiceFromPdfPage,
-    });
-    invoiceData = pageResult.invoice;
-    pageCount = pageResult.pageCount;
-    processedPages = pageResult.processedPages;
+    assertSinglePagePdf(buffer);
+    invoiceData = await parseInvoiceFromPdf(buffer.toString("base64"));
 
     console.info("document_parse_pages", {
       documentId,
       parseRunId,
       pageCount,
-      processedPages,
     });
   } catch (error) {
+    const detail =
+      error instanceof Error && error.message.startsWith("MULTI_PAGE_DOCUMENT_NOT_ALLOWED")
+        ? error.message
+        : "PARSE_ERROR";
+    const summary =
+      detail === "PARSE_ERROR"
+        ? "解析に失敗しました。"
+        : "1ページPDFのみ解析可能です。アップロードをやり直してください。";
     await db.transaction(async (tx) => {
       await tx
         .update(documentParseRuns)
-        .set({ status: "FAILED", finishedAt: new Date(), errorDetail: "PARSE_ERROR" })
+        .set({ status: "FAILED", finishedAt: new Date(), errorDetail: detail })
         .where(eq(documentParseRuns.parseRunId, parseRunId));
       await tx
         .update(documents)
-        .set({ status: "FAILED", parseErrorSummary: "解析に失敗しました。" })
+        .set({ status: "FAILED", parseErrorSummary: summary })
         .where(eq(documents.documentId, documentId));
     });
     throw error;
@@ -706,7 +705,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           lineItemCount: lineContexts.length,
           diffCount: diffRows.length,
           pageCount,
-          processedPages,
+          processedPages: 1,
         },
       })
       .where(eq(documentParseRuns.parseRunId, parseRunId));

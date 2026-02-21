@@ -3,6 +3,10 @@ export type DocumentStatus = "UPLOADED" | "PARSING" | "PARSED" | "FAILED" | "DEL
 export type DocumentListItem = {
   documentId: string;
   fileName: string;
+  uploadGroupId: string | null;
+  pageNumber: number | null;
+  pageTotal: number | null;
+  sourceFileHash: string | null;
   uploadedAt: string;
   status: DocumentStatus;
   vendorName: string | null;
@@ -31,6 +35,25 @@ export type RegisterDocumentInput = {
   storageKey: string;
   fileHash: string;
   uploadNote?: string | null;
+};
+
+export type RegisterDocumentPageInput = {
+  storageKey: string;
+  fileHash: string;
+  pageNumber: number;
+  pageTotal: number;
+};
+
+export type RegisterDocumentBulkInput = {
+  fileName: string;
+  uploadNote?: string | null;
+  sourceFileHash?: string | null;
+  pages: RegisterDocumentPageInput[];
+};
+
+export type RegisterDocumentBulkResult = {
+  uploadGroupId: string;
+  items: Array<{ documentId: string; pageNumber: number; status: DocumentStatus }>;
 };
 
 export type RegisterDocumentResult = {

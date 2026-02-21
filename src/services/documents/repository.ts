@@ -7,6 +7,8 @@ import type {
   DocumentLineItem,
   DocumentListItem,
   RegisterDocumentInput,
+  RegisterDocumentBulkInput,
+  RegisterDocumentBulkResult,
   RegisterDocumentResult,
   SoftDeleteResult,
 } from "@/services/documents/types";
@@ -31,6 +33,10 @@ export async function listDocuments(): Promise<DocumentListItem[]> {
     .select({
       documentId: documents.documentId,
       fileName: documents.fileName,
+      uploadGroupId: documents.uploadGroupId,
+      pageNumber: documents.pageNumber,
+      pageTotal: documents.pageTotal,
+      sourceFileHash: documents.sourceFileHash,
       uploadedAt: documents.uploadedAt,
       status: documents.status,
       vendorName: documents.vendorName,
@@ -39,11 +45,20 @@ export async function listDocuments(): Promise<DocumentListItem[]> {
     })
     .from(documents)
     .where(eq(documents.isDeleted, false))
-    .orderBy(desc(documents.uploadedAt));
+    .orderBy(
+      desc(documents.uploadedAt),
+      documents.uploadGroupId,
+      documents.pageNumber,
+      documents.documentId,
+    );
 
   return rows.map((row) => ({
     documentId: row.documentId,
     fileName: row.fileName,
+    uploadGroupId: row.uploadGroupId ?? null,
+    pageNumber: row.pageNumber ?? null,
+    pageTotal: row.pageTotal ?? null,
+    sourceFileHash: row.sourceFileHash ?? null,
     uploadedAt: toIsoString(row.uploadedAt) ?? "",
     status: row.status as DocumentListItem["status"],
     vendorName: row.vendorName ?? null,
@@ -58,6 +73,10 @@ export async function getDocumentDetail(documentId: string): Promise<DocumentDet
     .select({
       documentId: documents.documentId,
       fileName: documents.fileName,
+      uploadGroupId: documents.uploadGroupId,
+      pageNumber: documents.pageNumber,
+      pageTotal: documents.pageTotal,
+      sourceFileHash: documents.sourceFileHash,
       uploadedAt: documents.uploadedAt,
       status: documents.status,
       vendorName: documents.vendorName,
@@ -92,6 +111,10 @@ export async function getDocumentDetail(documentId: string): Promise<DocumentDet
   return {
     documentId: doc.documentId,
     fileName: doc.fileName,
+    uploadGroupId: doc.uploadGroupId ?? null,
+    pageNumber: doc.pageNumber ?? null,
+    pageTotal: doc.pageTotal ?? null,
+    sourceFileHash: doc.sourceFileHash ?? null,
     uploadedAt: toIsoString(doc.uploadedAt) ?? "",
     status: doc.status as DocumentDetail["status"],
     vendorName: doc.vendorName ?? null,
@@ -113,6 +136,45 @@ export async function getDocumentDetail(documentId: string): Promise<DocumentDet
         }
       : null,
   };
+}
+
+export async function registerDocumentBulk(
+  input: RegisterDocumentBulkInput,
+): Promise<RegisterDocumentBulkResult> {
+  const db = getDb();
+  const uploadGroupId = crypto.randomUUID();
+
+  const items = await db.transaction(async (tx) => {
+    const rows = await tx
+      .insert(documents)
+      .values(
+        input.pages.map((page) => ({
+          fileName: input.fileName,
+          storageKey: page.storageKey,
+          fileHash: page.fileHash,
+          uploadNote: input.uploadNote ?? null,
+          uploadGroupId,
+          pageNumber: page.pageNumber,
+          pageTotal: page.pageTotal,
+          sourceFileHash: input.sourceFileHash ?? null,
+        })),
+      )
+      .returning({
+        documentId: documents.documentId,
+        pageNumber: documents.pageNumber,
+        status: documents.status,
+      });
+
+    return rows
+      .map((row) => ({
+        documentId: row.documentId,
+        pageNumber: row.pageNumber ?? 1,
+        status: row.status as RegisterDocumentBulkResult["items"][number]["status"],
+      }))
+      .sort((a, b) => a.pageNumber - b.pageNumber);
+  });
+
+  return { uploadGroupId, items };
 }
 
 export async function registerDocument(
