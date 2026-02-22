@@ -56,9 +56,11 @@ function sanitizeFilename(name: string): string {
 export default function DocumentsClient({
   initialItems,
   maxPdfMb,
+  maxPdfPages,
 }: {
   initialItems: DocumentListItem[];
   maxPdfMb: number;
+  maxPdfPages: number;
 }) {
   const [items, setItems] = useState<DocumentListItem[]>(initialItems);
   const [uploadNote, setUploadNote] = useState("");
@@ -88,7 +90,7 @@ export default function DocumentsClient({
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
-      const fileArray = Array.from(files);
+      const fileArray = Array.from(files).slice(0, 1);
       if (fileArray.length === 0) return;
 
       setError(null);
@@ -125,28 +127,70 @@ export default function DocumentsClient({
           updateUpload({ status: "uploading", message: "アップロード準備中" });
 
           try {
-            const fileHash = await hashFile(file);
+            const sourceFileHash = await hashFile(file);
+            const srcBytes = new Uint8Array(await file.arrayBuffer());
+            const { getPdfPageCount, PdfSplitError, splitPdfPagesSequentially } = await import(
+              "@/services/documents/pdf-split"
+            );
+            const pageCount = await getPdfPageCount(srcBytes);
+            if (pageCount > maxPdfPages) {
+              throw new Error(`ページ数が上限（${maxPdfPages}）を超えています。`);
+            }
 
-            updateUpload({ status: "uploading", message: "PDFアップロード中" });
+            updateUpload({ status: "uploading", message: `分割準備中（0/${pageCount}）` });
 
-            const safeName = sanitizeFilename(file.name);
-            const pathname = `documents/${safeName}`;
+            const uploadedPages: Array<{
+              storageKey: string;
+              fileHash: string;
+              pageNumber: number;
+              pageTotal: number;
+            }> = [];
 
-            const blob = await upload(pathname, file, {
-              access: "public",
-              handleUploadUrl: "/api/documents/init-upload",
+            await splitPdfPagesSequentially(srcBytes, async (page) => {
+              updateUpload({
+                status: "uploading",
+                message: `page ${page.pageNumber}/${page.pageTotal} をアップロード中`,
+              });
+              try {
+                const pageHash = await hashBytes(page.bytes);
+                const pageFile = new File([page.bytes.slice()], `${file.name}.p${page.pageNumber}.pdf`, {
+                  type: "application/pdf",
+                });
+                const safeName = sanitizeFilename(`${file.name}.p${page.pageNumber}.pdf`);
+                const pathname = `documents/${safeName}`;
+
+                const blob = await upload(pathname, pageFile, {
+                  access: "public",
+                  handleUploadUrl: "/api/documents/init-upload",
+                });
+
+                uploadedPages.push({
+                  storageKey: blob.url,
+                  fileHash: pageHash,
+                  pageNumber: page.pageNumber,
+                  pageTotal: page.pageTotal,
+                });
+              } catch (error) {
+                throw new PdfSplitError(
+                  "PDF_SPLIT_PAGE_UPLOAD_FAILED",
+                  `ページ ${page.pageNumber} のアップロードに失敗しました。`,
+                  {
+                    cause: error,
+                    pageNumber: page.pageNumber,
+                  },
+                );
+              }
             });
 
             updateUpload({ status: "uploading", message: "登録処理中" });
 
-            const registerRes = await fetch("/api/documents", {
+            const registerRes = await fetch("/api/documents/bulk", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
                 fileName: file.name,
-                // parse 側が fetch(url) するなら、ここは URL を保存するのが最短
-                storageKey: blob.url,
-                fileHash,
+                sourceFileHash,
+                pages: uploadedPages,
                 uploadNote: uploadNote.trim() || undefined,
               }),
             });
@@ -156,12 +200,28 @@ export default function DocumentsClient({
               throw new Error(text || "登録に失敗しました。");
             }
 
-            updateUpload({ status: "done", message: "完了" });
+            updateUpload({ status: "done", message: `${uploadedPages.length}ページの登録が完了` });
             await refresh();
           } catch (err) {
+            const code =
+              typeof err === "object" && err !== null && "code" in err
+                ? String((err as { code: unknown }).code)
+                : "UPLOAD_FAILED";
+            const pageNumber =
+              typeof err === "object" && err !== null && "pageNumber" in err
+                ? Number((err as { pageNumber: unknown }).pageNumber)
+                : null;
+            console.error("[documents] upload flow failed", {
+              code,
+              pageNumber,
+              name: err instanceof Error ? err.name : "unknown",
+            });
             updateUpload({
               status: "error",
-              message: err instanceof Error ? err.message : "アップロードに失敗しました。",
+              message:
+                err instanceof Error
+                  ? `${err.message}${code !== "UPLOAD_FAILED" ? ` (${code})` : ""}`
+                  : "アップロードに失敗しました。",
             });
             setError("アップロードに失敗したファイルがあります。");
           }
@@ -170,7 +230,7 @@ export default function DocumentsClient({
         setBusy(false);
       }
     },
-    [maxBytes, maxPdfMb, refresh, uploadNote],
+    [maxBytes, maxPdfMb, maxPdfPages, refresh, uploadNote],
   );
 
   const onDelete = async () => {
@@ -270,7 +330,7 @@ export default function DocumentsClient({
             <tbody>
               {items.map((item) => (
                 <tr key={item.documentId}>
-                  <Td>{item.fileName}</Td>
+                  <Td>{renderFileName(item)}</Td>
                   <Td muted>{formatDateTime(item.uploadedAt)}</Td>
                   <Td>
                     <StatusChip status={item.status} />
@@ -393,7 +453,7 @@ function FileDropzone({
         ref={inputRef}
         type="file"
         accept="application/pdf"
-        multiple
+        multiple={false}
         onChange={(event) => event.target.files && onFiles(event.target.files)}
         style={{ display: "none" }}
         disabled={disabled}
@@ -402,9 +462,17 @@ function FileDropzone({
         <strong>PDFをドラッグ＆ドロップ</strong>
         <span style={{ color: "var(--muted)" }}>クリックでファイルを選択</span>
         <span style={{ color: "var(--muted)", fontSize: 12 }}>最大 {maxPdfMb}MB / PDFのみ</span>
+        <span style={{ color: "var(--muted)", fontSize: 12 }}>アップロードは1ファイルずつ</span>
       </div>
     </div>
   );
+}
+
+function renderFileName(item: DocumentListItem): string {
+  if (item.pageNumber && item.pageTotal) {
+    return `${item.fileName} (p${item.pageNumber}/${item.pageTotal})`;
+  }
+  return item.fileName;
 }
 
 function StatusChip({ status }: { status: DocumentListItem["status"] }) {
@@ -441,7 +509,21 @@ function StatusChip({ status }: { status: DocumentListItem["status"] }) {
 
 async function hashFile(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return hashArrayBuffer(buffer);
+}
+
+async function hashBytes(bytes: Uint8Array): Promise<string> {
+  const normalized = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  return hashArrayBuffer(normalized);
+}
+
+async function hashArrayBuffer(buffer: ArrayBuffer | SharedArrayBuffer): Promise<string> {
+  let bytes = new Uint8Array(buffer as ArrayBuffer);
+  if (!(buffer instanceof ArrayBuffer)) {
+    bytes = new Uint8Array(new ArrayBuffer(buffer.byteLength));
+    bytes.set(new Uint8Array(buffer));
+  }
+  const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

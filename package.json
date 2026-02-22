@@ -14,7 +14,7 @@
         "test": "vitest run",
         "test:ui": "vitest --ui",
         "db:generate": "node scripts/db/verify-schema.mjs",
-        "db:migrate": "node scripts/db/verify-schema.mjs",
+        "db:migrate": "node scripts/db/migrate.mjs",
         "db:deploy": "node scripts/db/verify-schema.mjs",
         "db:verify": "node scripts/db/verify-schema.mjs",
         "vercel-build": "node scripts/vercel-build.mjs"
@@ -27,7 +27,8 @@
         "postgres": "^3.4.8",
         "react": "19.2.3",
         "react-dom": "19.2.3",
-        "zod": "^4.3.6"
+        "zod": "^4.3.6",
+        "pdf-lib": "file:vendor/pdf-lib"
     },
     "devDependencies": {
         "@testing-library/jest-dom": "^6.9.1",

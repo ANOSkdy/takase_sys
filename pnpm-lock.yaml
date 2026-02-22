@@ -20,6 +20,9 @@ importers:
       pg:
         specifier: ^8.18.0
         version: 8.18.0
+      pdf-lib:
+        specifier: file:vendor/pdf-lib
+        version: file:vendor/pdf-lib
       postgres:
         specifier: ^3.4.8
         version: 3.4.8
@@ -2195,6 +2198,9 @@ packages:
   pg-types@2.2.0:
     resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
     engines: {node: '>=4'}
+
+  pdf-lib@file:vendor/pdf-lib:
+    resolution: {directory: vendor/pdf-lib, type: directory}
 
   pg@8.18.0:
     resolution: {integrity: sha512-xqrUDL1b9MbkydY/s+VZ6v+xiMUmOUk7SS9d/1kpyQxoJ6U9AO1oIJyUWVZojbfe5Cc/oluutcgFG4L9RDP1iQ==}
@@ -4832,6 +4838,8 @@ snapshots:
       postgres-bytea: 1.0.1
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
+
+  pdf-lib@file:vendor/pdf-lib: {}
 
   pg@8.18.0:
     dependencies:

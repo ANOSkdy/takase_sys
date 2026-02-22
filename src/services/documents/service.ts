@@ -1,10 +1,22 @@
 import { getEnv } from "@/config/env";
 import { getStorageProvider } from "@/services/storage";
-import type { RegisterDocumentInput, RegisterDocumentResult } from "@/services/documents/types";
-import { registerDocument as insertDocument } from "@/services/documents/repository";
+import type {
+  RegisterDocumentBulkInput,
+  RegisterDocumentBulkResult,
+  RegisterDocumentInput,
+  RegisterDocumentResult,
+} from "@/services/documents/types";
+import {
+  registerDocument as insertDocument,
+  registerDocumentBulk as insertDocumentBulk,
+} from "@/services/documents/repository";
 
 export type RegisterDocumentOutcome =
   | { ok: true; data: RegisterDocumentResult }
+  | { ok: false; status: number; title: string; detail: string };
+
+export type RegisterDocumentBulkOutcome =
+  | { ok: true; data: RegisterDocumentBulkResult }
   | { ok: false; status: number; title: string; detail: string };
 
 export async function registerDocument(
@@ -21,6 +33,55 @@ export async function registerDocument(
   }
 
   const data = await insertDocument(input);
+  return { ok: true, data };
+}
+
+export async function registerDocumentBulk(
+  input: RegisterDocumentBulkInput,
+): Promise<RegisterDocumentBulkOutcome> {
+  const pageTotal = input.pages[0]?.pageTotal ?? 0;
+  if (pageTotal < 1 || input.pages.length !== pageTotal) {
+    return {
+      ok: false,
+      status: 400,
+      title: "Bad Request",
+      detail: "pages length and pageTotal must match",
+    };
+  }
+
+  const pageNumbers = input.pages.map((page) => page.pageNumber).sort((a, b) => a - b);
+  for (const [index, pageNumber] of pageNumbers.entries()) {
+    if (pageNumber !== index + 1) {
+      return {
+        ok: false,
+        status: 400,
+        title: "Bad Request",
+        detail: "pageNumber must be unique and contiguous from 1 to pageTotal",
+      };
+    }
+  }
+
+  for (const page of input.pages) {
+    if (page.pageTotal !== pageTotal) {
+      return {
+        ok: false,
+        status: 400,
+        title: "Bad Request",
+        detail: "all pages must have the same pageTotal",
+      };
+    }
+    const headerCheck = await validatePdfHeader(page.storageKey);
+    if (headerCheck === "invalid") {
+      return {
+        ok: false,
+        status: 415,
+        title: "Unsupported Media Type",
+        detail: `Page ${page.pageNumber} is not a valid PDF`,
+      };
+    }
+  }
+
+  const data = await insertDocumentBulk(input);
   return { ok: true, data };
 }
 

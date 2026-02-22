@@ -19,9 +19,9 @@ if (shouldMigrate) {
   if (!hasDb) {
     console.warn("[vercel-build] DATABASE_URL(_UNPOOLED) not set. Skip generate/migrate.");
   } else {
-    console.log("[vercel-build] Running db:generate then db:migrate (preview only).");
-    run("pnpm db:generate");
+    console.log("[vercel-build] Running db:migrate then db:verify (preview only).");
     run("pnpm db:migrate");
+    run("pnpm db:verify");
   }
 } else {
   console.log("[vercel-build] Skip migrations (not preview or flag off).");

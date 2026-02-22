@@ -1,13 +1,17 @@
 import DocumentsClient from "./documents-client";
 import Link from "next/link";
-import { getMaxPdfSizeMb } from "@/services/documents/constants";
+import { getMaxPdfPages, getMaxPdfSizeMb } from "@/services/documents/constants";
 import { listDocuments } from "@/services/documents/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export default async function DocumentsPage() {
-  const [items, maxPdfMb] = await Promise.all([listDocuments(), getMaxPdfSizeMb()]);
+  const [items, maxPdfMb, maxPdfPages] = await Promise.all([
+    listDocuments(),
+    getMaxPdfSizeMb(),
+    getMaxPdfPages(),
+  ]);
 
   return (
     <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
@@ -31,7 +35,7 @@ export default async function DocumentsPage() {
         </Link>
       </header>
 
-      <DocumentsClient initialItems={items} maxPdfMb={maxPdfMb} />
+      <DocumentsClient initialItems={items} maxPdfMb={maxPdfMb} maxPdfPages={maxPdfPages} />
     </main>
   );
 }
