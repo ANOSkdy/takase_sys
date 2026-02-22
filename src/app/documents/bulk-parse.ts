@@ -122,7 +122,9 @@ export async function bulkParseSelected(options: {
     }
 
     try {
-      const parseRes = await fetchImpl(`/api/documents/${item.documentId}/parse`, { method: "POST" });
+      const parseRes = await fetchImpl(`/api/documents/${item.documentId}/parse`, {
+        method: "POST",
+      });
       if (!(parseRes.ok || parseRes.status === 409)) {
         const text = await parseRes.text().catch(() => "");
         throw new Error(text || `解析開始に失敗しました。(${parseRes.status})`);

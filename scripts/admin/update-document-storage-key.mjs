@@ -35,6 +35,8 @@ async function main() {
 
 main().catch(async (e) => {
   console.error("ERROR:", e?.message ?? e);
-  try { await client.end(); } catch {}
+  try {
+    await client.end();
+  } catch {}
   process.exit(1);
 });

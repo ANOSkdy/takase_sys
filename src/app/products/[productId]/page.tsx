@@ -79,7 +79,10 @@ export default async function ProductDetailPage({
               ))}
               {product.vendorPrices.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                  <td
+                    colSpan={4}
+                    style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
+                  >
                     まだ価格情報がありません。
                   </td>
                 </tr>
@@ -114,7 +117,10 @@ export default async function ProductDetailPage({
               ))}
               {product.updateHistory.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                  <td
+                    colSpan={5}
+                    style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
+                  >
                     まだ更新履歴がありません。
                   </td>
                 </tr>

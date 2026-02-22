@@ -32,14 +32,21 @@ export class PdfSplitError extends Error {
   code: PdfSplitErrorCode;
   pageNumber?: number;
 
-  constructor(code: PdfSplitErrorCode, message: string, options?: { cause?: unknown; pageNumber?: number }) {
+  constructor(
+    code: PdfSplitErrorCode,
+    message: string,
+    options?: { cause?: unknown; pageNumber?: number },
+  ) {
     super(message, { cause: options?.cause });
     this.code = code;
     this.pageNumber = options?.pageNumber;
   }
 }
 
-export async function getPdfPageCount(pdfBytes: Uint8Array, adapter?: PdfLibAdapter): Promise<number> {
+export async function getPdfPageCount(
+  pdfBytes: Uint8Array,
+  adapter?: PdfLibAdapter,
+): Promise<number> {
   const pdfLib = adapter ?? (await loadPdfLibAdapter());
   try {
     const srcDoc = await pdfLib.load(pdfBytes);
@@ -85,10 +92,9 @@ export async function splitPdfPagesSequentially(
 
 async function loadPdfLibAdapter(): Promise<PdfLibAdapter> {
   const triedErrors: unknown[] = [];
-  const importFromUrl = new Function(
-    "url",
-    "return import(/* webpackIgnore: true */ url)",
-  ) as (url: string) => Promise<{ PDFDocument?: PdfDocumentStatic }>;
+  const importFromUrl = new Function("url", "return import(/* webpackIgnore: true */ url)") as (
+    url: string,
+  ) => Promise<{ PDFDocument?: PdfDocumentStatic }>;
 
   const candidates: Array<() => Promise<{ PDFDocument?: PdfDocumentStatic }>> = [
     () => import("pdf-lib"),
@@ -99,7 +105,11 @@ async function loadPdfLibAdapter(): Promise<PdfLibAdapter> {
     try {
       const mod = await candidate();
       const PDFDocument = mod?.PDFDocument;
-      if (!PDFDocument || typeof PDFDocument.load !== "function" || typeof PDFDocument.create !== "function") {
+      if (
+        !PDFDocument ||
+        typeof PDFDocument.load !== "function" ||
+        typeof PDFDocument.create !== "function"
+      ) {
         throw new Error("PDFDocument API not available");
       }
       await PDFDocument.create();

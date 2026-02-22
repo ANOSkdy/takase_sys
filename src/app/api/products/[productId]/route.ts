@@ -10,10 +10,7 @@ const paramsSchema = z.object({
   productId: z.string().uuid(),
 });
 
-export async function GET(
-  _req: Request,
-  context: { params: Promise<{ productId: string }> },
-) {
+export async function GET(_req: Request, context: { params: Promise<{ productId: string }> }) {
   const parsedParams = paramsSchema.safeParse(await context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid productId", parsedParams.error.flatten());

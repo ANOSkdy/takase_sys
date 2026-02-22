@@ -193,9 +193,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
   ]);
 
   const total = rows.length ? Number(rows[0].totalCount) : 0;
-  const categories = categoryResult.rows
-    .map((r) => r.category?.trim() ?? "")
-    .filter(Boolean);
+  const categories = categoryResult.rows.map((r) => r.category?.trim() ?? "").filter(Boolean);
 
   const items: RecordRow[] = rows.map((r) => ({
     recordId: r.recordId,

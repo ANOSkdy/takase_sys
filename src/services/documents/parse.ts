@@ -575,7 +575,9 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         ? shouldBlockUpdate({
             systemConfidenceNum: context.systemConfidenceNum,
             vendorName,
-            unitPriceNum: hasPriceChange ? newUnitPriceNum : existingUnitPriceNum ?? newUnitPriceNum,
+            unitPriceNum: hasPriceChange
+              ? newUnitPriceNum
+              : (existingUnitPriceNum ?? newUnitPriceNum),
             keyIsWeak: !context.specRaw,
             deviation: hasPriceChange ? priceDeviation : 0,
           })
@@ -638,7 +640,10 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
 
       if (hasPriceChange && context.unitPrice) {
         if (!vendorName) continue;
-        const canUpdateByDate = isNewerInvoiceDate(invoiceDate, existingVendor?.priceUpdatedOn ?? null);
+        const canUpdateByDate = isNewerInvoiceDate(
+          invoiceDate,
+          existingVendor?.priceUpdatedOn ?? null,
+        );
         let updated = false;
         if (existingVendor) {
           if (canUpdateByDate) {

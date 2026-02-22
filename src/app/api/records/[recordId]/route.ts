@@ -13,10 +13,7 @@ export const dynamic = "force-dynamic";
 
 const duplicateKeyErrorSchema = z.object({ code: z.literal("23505") });
 
-export async function GET(
-  _req: Request,
-  context: { params: Promise<{ recordId: string }> },
-) {
+export async function GET(_req: Request, context: { params: Promise<{ recordId: string }> }) {
   const parsedParams = recordIdSchema.safeParse(await context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid recordId", parsedParams.error.flatten());
@@ -34,10 +31,7 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  req: Request,
-  context: { params: Promise<{ recordId: string }> },
-) {
+export async function PATCH(req: Request, context: { params: Promise<{ recordId: string }> }) {
   const parsedParams = recordIdSchema.safeParse(await context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid recordId", parsedParams.error.flatten());

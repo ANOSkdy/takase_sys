@@ -88,7 +88,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   }, [sp]);
 
   const editId = sp.get("edit");
-  const activeRecord = editId ? items.find((item) => item.recordId === editId) ?? null : null;
+  const activeRecord = editId ? (items.find((item) => item.recordId === editId) ?? null) : null;
 
   const page = Number(sp.get("page") ?? "1");
   const pageSize = Number(sp.get("pageSize") ?? form.pageSize ?? "50");
@@ -546,7 +546,9 @@ function RecordEditModal({
             )}
           </div>
 
-          {errorMessage && <p style={{ margin: 0, color: "var(--color-danger)" }}>{errorMessage}</p>}
+          {errorMessage && (
+            <p style={{ margin: 0, color: "var(--color-danger)" }}>{errorMessage}</p>
+          )}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-2)" }}>
             <button type="button" style={btnSecondary} onClick={onClose} disabled={busy}>
@@ -578,7 +580,12 @@ function Field({
   return (
     <div style={{ display: "grid", gap: "var(--space-2)" }}>
       <label style={{ fontSize: 12, color: "var(--muted)" }}>{label}</label>
-      <input ref={inputRef} value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle} />
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={inputStyle}
+      />
       {error && <p style={{ margin: 0, color: "var(--color-danger)", fontSize: 12 }}>{error}</p>}
     </div>
   );

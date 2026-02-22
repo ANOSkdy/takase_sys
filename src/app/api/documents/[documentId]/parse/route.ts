@@ -11,10 +11,7 @@ const paramsSchema = z.object({
   documentId: z.string().uuid(),
 });
 
-export async function POST(
-  _req: Request,
-  context: { params: Promise<{ documentId: string }> },
-) {
+export async function POST(_req: Request, context: { params: Promise<{ documentId: string }> }) {
   const parsedParams = paramsSchema.safeParse(await context.params);
   if (!parsedParams.success) {
     return problemResponse(400, "Bad Request", "Invalid documentId", parsedParams.error.flatten());

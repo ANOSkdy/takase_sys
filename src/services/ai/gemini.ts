@@ -1,10 +1,6 @@
 import "server-only";
 import { getEnv, requireEnv } from "@/config/env";
-import {
-  invoiceResponseSchema,
-  invoiceSchema,
-  type ParsedInvoice,
-} from "@/services/ai/schema";
+import { invoiceResponseSchema, invoiceSchema, type ParsedInvoice } from "@/services/ai/schema";
 import { SYSTEM_PROMPT } from "@/services/ai/prompt";
 
 type GeminiResponse = {
@@ -110,7 +106,7 @@ async function requestInvoiceParse(input: { pdfBase64: string }): Promise<Parsed
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(
-      `GEMINI_API_FAILED ${response.status} ${response.statusText} ${text.slice(0, 800)}`
+      `GEMINI_API_FAILED ${response.status} ${response.statusText} ${text.slice(0, 800)}`,
     );
   }
 
@@ -167,7 +163,6 @@ async function fetchWithRetry(endpoint: string, apiKey: string, body: unknown): 
 
   throw new Error("GEMINI_API_RETRY_EXHAUSTED");
 }
-
 
 export async function parseInvoiceFromPdf(pdfBase64: string): Promise<ParsedInvoice> {
   return requestInvoiceParse({ pdfBase64 });
