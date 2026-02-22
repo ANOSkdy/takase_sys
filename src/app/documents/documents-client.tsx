@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type { DocumentListItem } from "@/services/documents/types";
+import { bulkParseSelected, buildDocumentLabel, type BulkParseProgress } from "@/app/documents/bulk-parse";
 
 type UploadItem = {
   id: string;
@@ -29,6 +30,11 @@ type ParseState = {
   targetId: string;
   busy: boolean;
   fileName?: string;
+};
+
+type BulkConfirmState = {
+  open: boolean;
+  count: number;
 };
 
 const jstDateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
@@ -69,6 +75,10 @@ export default function DocumentsClient({
   const [error, setError] = useState<string | null>(null);
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [parseState, setParseState] = useState<ParseState | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkConfirm, setBulkConfirm] = useState<BulkConfirmState>({ open: false, count: 0 });
+  const [bulkProgress, setBulkProgress] = useState<BulkParseProgress | null>(null);
+  const bulkAbortRef = useRef<AbortController | null>(null);
 
   const maxBytes = useMemo(() => maxPdfMb * 1024 * 1024, [maxPdfMb]);
 
@@ -87,6 +97,14 @@ export default function DocumentsClient({
     }, 8000);
     return () => clearInterval(timer);
   }, [refresh]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const currentIds = new Set(items.map((item) => item.documentId));
+      const next = new Set(Array.from(prev).filter((id) => currentIds.has(id)));
+      return next;
+    });
+  }, [items]);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -275,6 +293,65 @@ export default function DocumentsClient({
     }
   };
 
+  const visibleIds = useMemo(() => items.map((item) => item.documentId), [items]);
+  const selectedCount = selectedIds.size;
+  const allVisibleSelected = useMemo(
+    () => visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id)),
+    [selectedIds, visibleIds],
+  );
+
+  const toggleItemSelection = (documentId: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(documentId);
+      else next.delete(documentId);
+      return next;
+    });
+  };
+
+  const toggleVisibleSelection = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleIds) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const startBulkParse = async () => {
+    const targetIds = new Set(selectedIds);
+    if (targetIds.size === 0) return;
+
+    const controller = new AbortController();
+    bulkAbortRef.current = controller;
+    setBulkProgress(null);
+    setBulkConfirm({ open: false, count: 0 });
+
+    try {
+      await bulkParseSelected({
+        items,
+        selectedIds: targetIds,
+        signal: controller.signal,
+        onProgress: (progress) => setBulkProgress(progress),
+      });
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "一括解析に失敗しました。");
+    } finally {
+      bulkAbortRef.current = null;
+    }
+  };
+
+  const cancelBulkParse = () => {
+    bulkAbortRef.current?.abort();
+  };
+
+  const selectUnfinished = () => {
+    setSelectedIds(new Set(items.filter((item) => item.status !== "PARSED").map((item) => item.documentId)));
+  };
+
   return (
     <section style={{ display: "grid", gap: "var(--space-4)" }}>
       <div style={cardStyle}>
@@ -310,14 +387,57 @@ export default function DocumentsClient({
       <div style={cardStyle}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ marginTop: 0 }}>一覧</h2>
-          <button style={btnSecondary} onClick={() => refresh()}>
-            再読み込み
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={btnSecondary} onClick={selectUnfinished}>
+              未完了を選択
+            </button>
+            <button
+              style={btnPrimary}
+              onClick={() => setBulkConfirm({ open: true, count: selectedCount })}
+              disabled={selectedCount === 0 || Boolean(bulkAbortRef.current)}
+            >
+              一括解析
+            </button>
+            <button style={btnSecondary} onClick={() => refresh()}>
+              再読み込み
+            </button>
+          </div>
         </div>
+        {bulkProgress && (
+          <div style={bulkProgressStyle}>
+            <strong>
+              一括解析進捗: {bulkProgress.done}/{bulkProgress.total}
+            </strong>
+            <div style={{ color: "var(--muted)", fontSize: 13 }}>
+              成功 {bulkProgress.success} / 失敗 {bulkProgress.failed} / スキップ {bulkProgress.skipped}
+            </div>
+            {bulkProgress.currentFileLabel && (
+              <div style={{ color: "var(--muted)", fontSize: 13 }}>
+                現在処理中: {bulkProgress.currentFileLabel}
+              </div>
+            )}
+            {bulkAbortRef.current && (
+              <button style={btnDanger} onClick={cancelBulkParse}>
+                一括解析を中止
+              </button>
+            )}
+            {bulkProgress.cancelled && (
+              <div style={{ color: "var(--color-danger)", fontSize: 13 }}>一括解析を中止しました。</div>
+            )}
+          </div>
+        )}
         <div style={{ overflowX: "auto" }}>
           <table style={tableStyle}>
             <thead>
               <tr>
+                <Th>
+                  <input
+                    type="checkbox"
+                    aria-label="表示中の全選択"
+                    checked={allVisibleSelected}
+                    onChange={(event) => toggleVisibleSelection(event.target.checked)}
+                  />
+                </Th>
                 <Th>ファイル名</Th>
                 <Th>アップロード日時</Th>
                 <Th>ステータス</Th>
@@ -330,6 +450,14 @@ export default function DocumentsClient({
             <tbody>
               {items.map((item) => (
                 <tr key={item.documentId}>
+                  <Td>
+                    <input
+                      type="checkbox"
+                      aria-label={`${buildDocumentLabel(item)} を選択`}
+                      checked={selectedIds.has(item.documentId)}
+                      onChange={(event) => toggleItemSelection(item.documentId, event.target.checked)}
+                    />
+                  </Td>
                   <Td>{renderFileName(item)}</Td>
                   <Td muted>{formatDateTime(item.uploadedAt)}</Td>
                   <Td>
@@ -367,7 +495,7 @@ export default function DocumentsClient({
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                  <td colSpan={8} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
                     まだアップロードされたPDFがありません。
                   </td>
                 </tr>
@@ -408,6 +536,30 @@ export default function DocumentsClient({
                 ? `「${parseState.fileName}」を解析しています。完了までこのままお待ちください。`
                 : "PDFを解析しています。完了までこのままお待ちください。"}
             </p>
+          </div>
+        </div>
+      )}
+
+      {bulkConfirm.open && (
+        <div style={modalBackdrop} role="dialog" aria-modal="true">
+          <div style={modalPanel}>
+            <h3>一括解析の確認</h3>
+            <p style={{ color: "var(--muted)" }}>
+              選択中の {bulkConfirm.count} 件を1ページずつ順番に解析します。完了まで時間がかかる可能性があります。
+            </p>
+            <p style={{ color: "var(--muted)" }}>開始しますか？</p>
+            <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
+              <button
+                style={btnSecondary}
+                onClick={() => setBulkConfirm({ open: false, count: 0 })}
+                disabled={Boolean(bulkAbortRef.current)}
+              >
+                キャンセル
+              </button>
+              <button style={btnPrimary} onClick={startBulkParse} disabled={Boolean(bulkAbortRef.current)}>
+                逐次で一括解析を開始
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -623,6 +775,16 @@ const tableStyle: CSSProperties = {
   border: "1px solid var(--border)",
   borderRadius: "var(--radius-lg)",
   overflow: "hidden",
+};
+
+const bulkProgressStyle: CSSProperties = {
+  display: "grid",
+  gap: 4,
+  marginBottom: "var(--space-3)",
+  padding: "var(--space-3)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius-md)",
+  background: "rgba(0,0,0,0.02)",
 };
 
 const uploadRowStyle: CSSProperties = {
