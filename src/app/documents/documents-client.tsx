@@ -10,7 +10,6 @@ import {
   type CSSProperties,
 } from "react";
 import type { ReactNode } from "react";
-import { splitPdfIntoSinglePages } from "@/services/documents/pdf-split";
 import type { DocumentListItem } from "@/services/documents/types";
 
 type UploadItem = {
@@ -130,32 +129,57 @@ export default function DocumentsClient({
           try {
             const sourceFileHash = await hashFile(file);
             const srcBytes = new Uint8Array(await file.arrayBuffer());
-            const pages = await splitPdfIntoSinglePages(srcBytes);
-            if (pages.length > maxPdfPages) {
+            const { getPdfPageCount, PdfSplitError, splitPdfPagesSequentially } = await import(
+              "@/services/documents/pdf-split"
+            );
+            const pageCount = await getPdfPageCount(srcBytes);
+            if (pageCount > maxPdfPages) {
               throw new Error(`ページ数が上限（${maxPdfPages}）を超えています。`);
             }
 
-            updateUpload({ status: "uploading", message: `${pages.length}ページを分割中` });
+            updateUpload({ status: "uploading", message: `分割準備中（0/${pageCount}）` });
 
-            const uploadedPages = await runWithConcurrencyLimit(4, pages, async (page) => {
-              const pageHash = await hashBytes(page.bytes);
-              const pageFile = new File([page.bytes.slice()], `${file.name}.p${page.pageNumber}.pdf`, {
-                type: "application/pdf",
+            const uploadedPages: Array<{
+              storageKey: string;
+              fileHash: string;
+              pageNumber: number;
+              pageTotal: number;
+            }> = [];
+
+            await splitPdfPagesSequentially(srcBytes, async (page) => {
+              updateUpload({
+                status: "uploading",
+                message: `page ${page.pageNumber}/${page.pageTotal} をアップロード中`,
               });
-              const safeName = sanitizeFilename(`${file.name}.p${page.pageNumber}.pdf`);
-              const pathname = `documents/${safeName}`;
+              try {
+                const pageHash = await hashBytes(page.bytes);
+                const pageFile = new File([page.bytes.slice()], `${file.name}.p${page.pageNumber}.pdf`, {
+                  type: "application/pdf",
+                });
+                const safeName = sanitizeFilename(`${file.name}.p${page.pageNumber}.pdf`);
+                const pathname = `documents/${safeName}`;
 
-              const blob = await upload(pathname, pageFile, {
-                access: "public",
-                handleUploadUrl: "/api/documents/init-upload",
-              });
+                const blob = await upload(pathname, pageFile, {
+                  access: "public",
+                  handleUploadUrl: "/api/documents/init-upload",
+                });
 
-              return {
-                storageKey: blob.url,
-                fileHash: pageHash,
-                pageNumber: page.pageNumber,
-                pageTotal: page.pageTotal,
-              };
+                uploadedPages.push({
+                  storageKey: blob.url,
+                  fileHash: pageHash,
+                  pageNumber: page.pageNumber,
+                  pageTotal: page.pageTotal,
+                });
+              } catch (error) {
+                throw new PdfSplitError(
+                  "PDF_SPLIT_PAGE_UPLOAD_FAILED",
+                  `ページ ${page.pageNumber} のアップロードに失敗しました。`,
+                  {
+                    cause: error,
+                    pageNumber: page.pageNumber,
+                  },
+                );
+              }
             });
 
             updateUpload({ status: "uploading", message: "登録処理中" });
@@ -179,9 +203,25 @@ export default function DocumentsClient({
             updateUpload({ status: "done", message: `${uploadedPages.length}ページの登録が完了` });
             await refresh();
           } catch (err) {
+            const code =
+              typeof err === "object" && err !== null && "code" in err
+                ? String((err as { code: unknown }).code)
+                : "UPLOAD_FAILED";
+            const pageNumber =
+              typeof err === "object" && err !== null && "pageNumber" in err
+                ? Number((err as { pageNumber: unknown }).pageNumber)
+                : null;
+            console.error("[documents] upload flow failed", {
+              code,
+              pageNumber,
+              name: err instanceof Error ? err.name : "unknown",
+            });
             updateUpload({
               status: "error",
-              message: err instanceof Error ? err.message : "アップロードに失敗しました。",
+              message:
+                err instanceof Error
+                  ? `${err.message}${code !== "UPLOAD_FAILED" ? ` (${code})` : ""}`
+                  : "アップロードに失敗しました。",
             });
             setError("アップロードに失敗したファイルがあります。");
           }
@@ -190,7 +230,7 @@ export default function DocumentsClient({
         setBusy(false);
       }
     },
-    [maxBytes, maxPdfMb, refresh, uploadNote],
+    [maxBytes, maxPdfMb, maxPdfPages, refresh, uploadNote],
   );
 
   const onDelete = async () => {
@@ -487,26 +527,6 @@ async function hashArrayBuffer(buffer: ArrayBuffer | SharedArrayBuffer): Promise
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-}
-
-async function runWithConcurrencyLimit<T, R>(
-  limit: number,
-  items: T[],
-  worker: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await worker(items[index], index);
-    }
-  });
-
-  await Promise.all(runners);
-  return results;
 }
 
 function formatDateTime(iso: string) {
