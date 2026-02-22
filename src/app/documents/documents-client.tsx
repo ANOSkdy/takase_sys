@@ -385,9 +385,10 @@ export default function DocumentsClient({
       </div>
 
       <div style={cardStyle}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ marginTop: 0 }}>一覧</h2>
-          <div style={{ display: "flex", gap: 8 }}>
+        <div style={listHeaderStyle}>
+          <h2 style={{ margin: 0 }}>一覧</h2>
+          <div style={listActionsStyle}>
+            <span style={selectedCountStyle}>選択中: {selectedCount}件</span>
             <button style={btnSecondary} onClick={selectUnfinished}>
               未完了を選択
             </button>
@@ -426,7 +427,7 @@ export default function DocumentsClient({
             )}
           </div>
         )}
-        <div style={{ overflowX: "auto" }}>
+        <div style={tableWrapperStyle}>
           <table style={tableStyle}>
             <thead>
               <tr>
@@ -765,6 +766,35 @@ const btnLink: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
+};
+
+
+const listHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "var(--space-3)",
+  marginBottom: "var(--space-3)",
+  flexWrap: "wrap",
+};
+
+const listActionsStyle: CSSProperties = {
+  display: "flex",
+  gap: 10,
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const selectedCountStyle: CSSProperties = {
+  fontSize: 13,
+  color: "var(--muted)",
+  marginRight: 4,
+  padding: "0 4px",
+};
+
+const tableWrapperStyle: CSSProperties = {
+  overflowX: "auto",
+  marginTop: "var(--space-2)",
 };
 
 const tableStyle: CSSProperties = {
