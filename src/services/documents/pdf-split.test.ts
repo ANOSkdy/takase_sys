@@ -36,12 +36,18 @@ describe("splitPdfPagesSequentially", () => {
     await splitPdfPagesSequentially(
       new Uint8Array([1, 2, 3]),
       async (page) => {
-        pages.push({ pageNumber: page.pageNumber, pageTotal: page.pageTotal, value: page.bytes[0] ?? 0 });
+        pages.push({
+          pageNumber: page.pageNumber,
+          pageTotal: page.pageTotal,
+          value: page.bytes[0] ?? 0,
+        });
       },
       createFakePdfAdapter(3),
     );
 
-    expect(pages.map((page) => ({ pageNumber: page.pageNumber, pageTotal: page.pageTotal }))).toEqual([
+    expect(
+      pages.map((page) => ({ pageNumber: page.pageNumber, pageTotal: page.pageTotal })),
+    ).toEqual([
       { pageNumber: 1, pageTotal: 3 },
       { pageNumber: 2, pageTotal: 3 },
       { pageNumber: 3, pageTotal: 3 },

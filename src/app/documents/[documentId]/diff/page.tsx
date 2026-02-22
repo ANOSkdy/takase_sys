@@ -62,16 +62,14 @@ export default async function DocumentDiffPage({
           ← 一覧へ戻る
         </a>
         <h1 style={{ margin: 0 }}>差分結果</h1>
-        <p style={{ margin: 0, color: "var(--muted)" }}>
-          PDF解析の差分と自動更新の判定結果です。
-        </p>
+        <p style={{ margin: 0, color: "var(--muted)" }}>PDF解析の差分と自動更新の判定結果です。</p>
       </header>
 
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>更新サマリー</h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
           {tabs.map((tab) => {
-            const count = tab === "ALL" ? diffItems.length : summary[tab] ?? 0;
+            const count = tab === "ALL" ? diffItems.length : (summary[tab] ?? 0);
             const href =
               tab === "ALL"
                 ? `/documents/${documentId}/diff`
@@ -132,7 +130,10 @@ export default async function DocumentDiffPage({
               ))}
               {lineItems.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                  <td
+                    colSpan={7}
+                    style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
+                  >
                     まだ解析結果がありません。
                   </td>
                 </tr>
@@ -173,7 +174,10 @@ export default async function DocumentDiffPage({
               ))}
               {filteredDiffItems.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                  <td
+                    colSpan={6}
+                    style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
+                  >
                     差分はまだありません。
                   </td>
                 </tr>

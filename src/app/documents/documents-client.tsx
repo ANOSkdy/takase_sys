@@ -1,17 +1,14 @@
 "use client";
 
 import { upload } from "@vercel/blob/client";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { ReactNode } from "react";
 import type { DocumentListItem } from "@/services/documents/types";
-import { bulkParseSelected, buildDocumentLabel, type BulkParseProgress } from "@/app/documents/bulk-parse";
+import {
+  bulkParseSelected,
+  buildDocumentLabel,
+  type BulkParseProgress,
+} from "@/app/documents/bulk-parse";
 
 type UploadItem = {
   id: string;
@@ -125,9 +122,7 @@ export default function DocumentsClient({
         for (const [index, file] of fileArray.entries()) {
           const uploadId = newUploads[index]?.id;
           const updateUpload = (patch: Partial<UploadItem>) => {
-            setUploads((prev) =>
-              prev.map((u) => (u.id === uploadId ? { ...u, ...patch } : u)),
-            );
+            setUploads((prev) => prev.map((u) => (u.id === uploadId ? { ...u, ...patch } : u)));
           };
 
           if (file.type !== "application/pdf") {
@@ -147,9 +142,8 @@ export default function DocumentsClient({
           try {
             const sourceFileHash = await hashFile(file);
             const srcBytes = new Uint8Array(await file.arrayBuffer());
-            const { getPdfPageCount, PdfSplitError, splitPdfPagesSequentially } = await import(
-              "@/services/documents/pdf-split"
-            );
+            const { getPdfPageCount, PdfSplitError, splitPdfPagesSequentially } =
+              await import("@/services/documents/pdf-split");
             const pageCount = await getPdfPageCount(srcBytes);
             if (pageCount > maxPdfPages) {
               throw new Error(`ページ数が上限（${maxPdfPages}）を超えています。`);
@@ -171,9 +165,13 @@ export default function DocumentsClient({
               });
               try {
                 const pageHash = await hashBytes(page.bytes);
-                const pageFile = new File([page.bytes.slice()], `${file.name}.p${page.pageNumber}.pdf`, {
-                  type: "application/pdf",
-                });
+                const pageFile = new File(
+                  [page.bytes.slice()],
+                  `${file.name}.p${page.pageNumber}.pdf`,
+                  {
+                    type: "application/pdf",
+                  },
+                );
                 const safeName = sanitizeFilename(`${file.name}.p${page.pageNumber}.pdf`);
                 const pathname = `documents/${safeName}`;
 
@@ -349,7 +347,9 @@ export default function DocumentsClient({
   };
 
   const selectUnfinished = () => {
-    setSelectedIds(new Set(items.filter((item) => item.status !== "PARSED").map((item) => item.documentId)));
+    setSelectedIds(
+      new Set(items.filter((item) => item.status !== "PARSED").map((item) => item.documentId)),
+    );
   };
 
   return (
@@ -410,7 +410,8 @@ export default function DocumentsClient({
               一括解析進捗: {bulkProgress.done}/{bulkProgress.total}
             </strong>
             <div style={{ color: "var(--muted)", fontSize: 13 }}>
-              成功 {bulkProgress.success} / 失敗 {bulkProgress.failed} / スキップ {bulkProgress.skipped}
+              成功 {bulkProgress.success} / 失敗 {bulkProgress.failed} / スキップ{" "}
+              {bulkProgress.skipped}
             </div>
             {bulkProgress.currentFileLabel && (
               <div style={{ color: "var(--muted)", fontSize: 13 }}>
@@ -423,7 +424,9 @@ export default function DocumentsClient({
               </button>
             )}
             {bulkProgress.cancelled && (
-              <div style={{ color: "var(--color-danger)", fontSize: 13 }}>一括解析を中止しました。</div>
+              <div style={{ color: "var(--color-danger)", fontSize: 13 }}>
+                一括解析を中止しました。
+              </div>
             )}
           </div>
         )}
@@ -456,7 +459,9 @@ export default function DocumentsClient({
                       type="checkbox"
                       aria-label={`${buildDocumentLabel(item)} を選択`}
                       checked={selectedIds.has(item.documentId)}
-                      onChange={(event) => toggleItemSelection(item.documentId, event.target.checked)}
+                      onChange={(event) =>
+                        toggleItemSelection(item.documentId, event.target.checked)
+                      }
                     />
                   </Td>
                   <Td>{renderFileName(item)}</Td>
@@ -496,7 +501,10 @@ export default function DocumentsClient({
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                  <td
+                    colSpan={8}
+                    style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
+                  >
                     まだアップロードされたPDFがありません。
                   </td>
                 </tr>
@@ -514,10 +522,16 @@ export default function DocumentsClient({
               「{deleteState.target.fileName}」を本当に削除しますか？
             </p>
 
-            {deleteState.error && <p style={{ color: "var(--color-danger)" }}>{deleteState.error}</p>}
+            {deleteState.error && (
+              <p style={{ color: "var(--color-danger)" }}>{deleteState.error}</p>
+            )}
 
             <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
-              <button style={btnSecondary} onClick={() => setDeleteState(null)} disabled={deleteState.busy}>
+              <button
+                style={btnSecondary}
+                onClick={() => setDeleteState(null)}
+                disabled={deleteState.busy}
+              >
                 いいえ
               </button>
               <button style={btnDanger} onClick={onDelete} disabled={deleteState.busy}>
@@ -546,7 +560,8 @@ export default function DocumentsClient({
           <div style={modalPanel}>
             <h3>一括解析の確認</h3>
             <p style={{ color: "var(--muted)" }}>
-              選択中の {bulkConfirm.count} 件を1ページずつ順番に解析します。完了まで時間がかかる可能性があります。
+              選択中の {bulkConfirm.count}{" "}
+              件を1ページずつ順番に解析します。完了まで時間がかかる可能性があります。
             </p>
             <p style={{ color: "var(--muted)" }}>開始しますか？</p>
             <div style={{ display: "flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
@@ -557,7 +572,11 @@ export default function DocumentsClient({
               >
                 キャンセル
               </button>
-              <button style={btnPrimary} onClick={startBulkParse} disabled={Boolean(bulkAbortRef.current)}>
+              <button
+                style={btnPrimary}
+                onClick={startBulkParse}
+                disabled={Boolean(bulkAbortRef.current)}
+              >
                 逐次で一括解析を開始
               </button>
             </div>
@@ -767,7 +786,6 @@ const btnLink: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
 };
-
 
 const listHeaderStyle: CSSProperties = {
   display: "flex",

@@ -2,7 +2,11 @@ import type { ParsedInvoice } from "@/services/ai/schema";
 import { mergeParsedInvoices } from "@/services/documents/page-merge";
 import { detectPdfPageCount } from "@/services/documents/pdf-pages";
 
-type ParsePageFn = (input: { pdfBase64: string; pageNumber: number; totalPages: number }) => Promise<ParsedInvoice>;
+type ParsePageFn = (input: {
+  pdfBase64: string;
+  pageNumber: number;
+  totalPages: number;
+}) => Promise<ParsedInvoice>;
 
 // Current policy: fail-fast. If any page parse fails, reject and persist nothing from this parse run.
 export async function parseInvoiceFromPdfPages(input: {

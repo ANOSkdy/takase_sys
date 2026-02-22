@@ -7,7 +7,15 @@ describe("parseInvoiceFromPdfPages", () => {
       vendorName: pageNumber === 1 ? "A商事" : null,
       invoiceDate: pageNumber === 1 ? "2026-01-01" : null,
       lineItems: [
-        { lineNo: 1, productName: `item-${pageNumber}`, spec: null, quantity: 1, unitPrice: 10, amount: 10, confidence: 0.9 },
+        {
+          lineNo: 1,
+          productName: `item-${pageNumber}`,
+          spec: null,
+          quantity: 1,
+          unitPrice: 10,
+          amount: 10,
+          confidence: 0.9,
+        },
       ],
     }));
 
@@ -36,7 +44,15 @@ describe("parseInvoiceFromPdfPages", () => {
         vendorName: "A商事",
         invoiceDate: "2026-01-01",
         lineItems: [
-          { lineNo: 1, productName: `item-${pageNumber}`, spec: null, quantity: 1, unitPrice: 10, amount: 10, confidence: 0.9 },
+          {
+            lineNo: 1,
+            productName: `item-${pageNumber}`,
+            spec: null,
+            quantity: 1,
+            unitPrice: 10,
+            amount: 10,
+            confidence: 0.9,
+          },
         ],
       };
     });
@@ -52,5 +68,4 @@ describe("parseInvoiceFromPdfPages", () => {
     ).rejects.toThrow("PAGE_PARSE_FAILED");
     expect(parsePage).toHaveBeenCalledTimes(2);
   });
-
 });

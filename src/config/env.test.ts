@@ -52,5 +52,4 @@ describe("serverEnvSchema", () => {
     });
     expect(result.success).toBe(false);
   });
-
 });

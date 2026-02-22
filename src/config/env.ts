@@ -6,38 +6,40 @@
  * - Do NOT validate at import time (keep build stable).
  * - Call getEnv() only in server runtime paths.
  */
-export const serverEnvSchema = z.object({
-  // Neon / Postgres
-  DATABASE_URL: z.string().min(1),
-  DATABASE_URL_UNPOOLED: z.string().min(1).optional(),
+export const serverEnvSchema = z
+  .object({
+    // Neon / Postgres
+    DATABASE_URL: z.string().min(1),
+    DATABASE_URL_UNPOOLED: z.string().min(1).optional(),
 
-  // Gemini
-  GEMINI_API_KEY: z.string().min(1).optional(),
-  GEMINI_MODEL: z.string().min(1).optional(),
+    // Gemini
+    GEMINI_API_KEY: z.string().min(1).optional(),
+    GEMINI_MODEL: z.string().min(1).optional(),
 
-  // Storage (provider-agnostic)
-  STORAGE_PROVIDER: z.string().min(1),
-  BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+    // Storage (provider-agnostic)
+    STORAGE_PROVIDER: z.string().min(1),
+    BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
 
-  // Upload limits
-  APP_MAX_PDF_MB: z.coerce.number().int().positive().optional(),
-  APP_MAX_PDF_PAGES: z.coerce.number().int().positive().optional(),
+    // Upload limits
+    APP_MAX_PDF_MB: z.coerce.number().int().positive().optional(),
+    APP_MAX_PDF_PAGES: z.coerce.number().int().positive().optional(),
 
-  // Preview-only gate (future use)
-  MIGRATE_ON_PREVIEW: z.string().optional(),
+    // Preview-only gate (future use)
+    MIGRATE_ON_PREVIEW: z.string().optional(),
 
-  // Production migration gates (future use)
-  ALLOW_PROD_MIGRATION: z.string().optional(),
-  CONFIRM_PROD_MIGRATION: z.string().optional(),
-}).superRefine((env, ctx) => {
-  if (env.STORAGE_PROVIDER === "vercel-blob" && !env.BLOB_READ_WRITE_TOKEN) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "BLOB_READ_WRITE_TOKEN is required for vercel-blob",
-      path: ["BLOB_READ_WRITE_TOKEN"],
-    });
-  }
-});
+    // Production migration gates (future use)
+    ALLOW_PROD_MIGRATION: z.string().optional(),
+    CONFIRM_PROD_MIGRATION: z.string().optional(),
+  })
+  .superRefine((env, ctx) => {
+    if (env.STORAGE_PROVIDER === "vercel-blob" && !env.BLOB_READ_WRITE_TOKEN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "BLOB_READ_WRITE_TOKEN is required for vercel-blob",
+        path: ["BLOB_READ_WRITE_TOKEN"],
+      });
+    }
+  });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 

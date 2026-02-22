@@ -321,8 +321,7 @@ export async function listDocumentDiffItems(
   documentId: string,
   options?: { parseRunId?: string | null; classification?: string | null },
 ): Promise<DocumentDiffItem[]> {
-  const resolvedParseRunId =
-    options?.parseRunId ?? (await getLatestParseRunId(documentId));
+  const resolvedParseRunId = options?.parseRunId ?? (await getLatestParseRunId(documentId));
   if (!resolvedParseRunId) return [];
   const db = getDb();
   const conditions = [eq(documentDiffItems.parseRunId, resolvedParseRunId)];

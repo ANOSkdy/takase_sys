@@ -7,13 +7,17 @@ const state = {
 
 vi.mock("@/db/client", () => ({
   getDb: () => ({
-    transaction: async (callback: (tx: {
-      insert: () => {
-        values: (rows: Array<Record<string, unknown>>) => {
-          returning: () => Promise<Array<{ documentId: string; pageNumber: unknown; status: string }>>;
+    transaction: async (
+      callback: (tx: {
+        insert: () => {
+          values: (rows: Array<Record<string, unknown>>) => {
+            returning: () => Promise<
+              Array<{ documentId: string; pageNumber: unknown; status: string }>
+            >;
+          };
         };
-      };
-    }) => Promise<unknown>) => {
+      }) => Promise<unknown>,
+    ) => {
       const staged: Array<Record<string, unknown>> = [];
       const tx = {
         insert: () => ({

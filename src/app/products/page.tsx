@@ -75,7 +75,10 @@ export default async function ProductsPage({
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                  <td
+                    colSpan={5}
+                    style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
+                  >
                     まだ商品がありません。
                   </td>
                 </tr>
