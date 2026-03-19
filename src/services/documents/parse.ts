@@ -415,7 +415,8 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         spec: specRaw,
       });
       const systemConfidence = toNumericString(systemConfidenceNum, 3);
-      const matched = productMap.get(productKeyCandidate) ?? productMap.get(legacyProductKeyCandidate);
+      const matched =
+        productMap.get(productKeyCandidate) ?? productMap.get(legacyProductKeyCandidate);
       lineContexts.push({
         lineItemId: crypto.randomUUID(),
         lineNo: item.lineNo ?? index + 1,
