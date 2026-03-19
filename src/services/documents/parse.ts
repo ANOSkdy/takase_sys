@@ -32,9 +32,11 @@ const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 type LineItemContext = {
   lineItemId: string;
   lineNo: number;
+  productMaker: string | null;
   productNameRaw: string;
   specRaw: string | null;
   productKeyCandidate: string;
+  legacyProductKeyCandidate: string;
   quantity: string | null;
   unitPrice: string | null;
   amount: string | null;
@@ -86,6 +88,7 @@ function buildLineItemRow(input: LineItemContext & { parseRunId: string }): Line
     lineItemId: input.lineItemId,
     parseRunId: input.parseRunId,
     lineNo: input.lineNo,
+    productMaker: input.productMaker,
     productNameRaw: input.productNameRaw,
     specRaw: input.specRaw,
     productKeyCandidate: input.productKeyCandidate,
@@ -145,6 +148,7 @@ function buildVendorPriceRow(input: {
 function buildProductRow(input: {
   productId: string;
   productKey: string;
+  productMaker: string | null;
   productName: string;
   spec: string | null;
   defaultUnitPrice: string | null;
@@ -154,6 +158,7 @@ function buildProductRow(input: {
   return {
     productId: input.productId,
     productKey: input.productKey,
+    productMaker: input.productMaker,
     productName: input.productName,
     spec: input.spec,
     category: resolveCategory({ existing: null, incoming: null }),
@@ -163,6 +168,20 @@ function buildProductRow(input: {
     lastSourceType: "PDF",
     lastSourceId: input.sourceId,
   };
+}
+
+function sanitizeProductName(input: { productName: string; productMaker: string | null }): string {
+  const normalizedName = normalizeText(input.productName);
+  if (!normalizedName) return "";
+  if (!input.productMaker) return normalizedName;
+
+  const normalizedMaker = normalizeText(input.productMaker);
+  if (!normalizedMaker) return normalizedName;
+
+  const escapedMaker = normalizedMaker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const makerPrefixRegex = new RegExp(`^${escapedMaker}[\\s:/：｜・-]*`);
+  const stripped = normalizedName.replace(makerPrefixRegex, "").trim();
+  return stripped || normalizedName;
 }
 
 function buildUpdateHistoryRow(input: {
@@ -323,11 +342,17 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
   await db.transaction(async (tx) => {
     const productKeySet = new Set<string>();
     invoiceData.lineItems.forEach((item) => {
-      const name = item.productName?.trim() ?? "";
+      const productMaker = item.productMaker ? normalizeText(item.productMaker) : null;
+      const name = sanitizeProductName({
+        productName: item.productName ?? "",
+        productMaker,
+      });
       if (!name) return;
       const spec = item.spec ?? null;
-      const key = makeProductKey(name, spec);
+      const key = makeProductKey(name, spec, productMaker);
+      const legacyKey = makeProductKey(name, spec);
       if (key) productKeySet.add(key);
+      if (legacyKey) productKeySet.add(legacyKey);
     });
     const productKeys = Array.from(productKeySet);
 
@@ -336,6 +361,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           .select({
             productId: productMaster.productId,
             productKey: productMaster.productKey,
+            productMaker: productMaster.productMaker,
             productName: productMaster.productName,
             spec: productMaster.spec,
             defaultUnitPrice: productMaster.defaultUnitPrice,
@@ -352,6 +378,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         {
           productId: row.productId,
           productKey: row.productKey,
+          productMaker: row.productMaker ?? null,
           productName: row.productName,
           spec: row.spec ?? null,
           defaultUnitPrice: row.defaultUnitPrice ?? null,
@@ -364,10 +391,15 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
     const lineContexts: LineItemContext[] = [];
 
     invoiceData.lineItems.forEach((item, index) => {
-      const productNameRaw = normalizeText(item.productName ?? "");
+      const productMaker = item.productMaker ? normalizeText(item.productMaker) : null;
+      const productNameRaw = sanitizeProductName({
+        productName: item.productName ?? "",
+        productMaker,
+      });
       if (!productNameRaw) return;
       const specRaw = item.spec ? normalizeText(item.spec) : null;
-      const productKeyCandidate = makeProductKey(productNameRaw, specRaw);
+      const productKeyCandidate = makeProductKey(productNameRaw, specRaw, productMaker);
+      const legacyProductKeyCandidate = makeProductKey(productNameRaw, specRaw);
       if (!productKeyCandidate) return;
       const quantity = toNumericString(item.quantity, 3);
       const unitPrice = toNumericString(item.unitPrice, 2);
@@ -383,13 +415,15 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         spec: specRaw,
       });
       const systemConfidence = toNumericString(systemConfidenceNum, 3);
-      const matched = productMap.get(productKeyCandidate);
+      const matched = productMap.get(productKeyCandidate) ?? productMap.get(legacyProductKeyCandidate);
       lineContexts.push({
         lineItemId: crypto.randomUUID(),
         lineNo: item.lineNo ?? index + 1,
+        productMaker,
         productNameRaw,
         specRaw,
         productKeyCandidate,
+        legacyProductKeyCandidate,
         quantity,
         unitPrice,
         amount,
@@ -412,6 +446,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       const productRow = buildProductRow({
         productId,
         productKey: context.productKeyCandidate,
+        productMaker: context.productMaker,
         productName: context.productNameRaw,
         spec: context.specRaw,
         defaultUnitPrice: context.unitPrice,
@@ -425,6 +460,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         .onConflictDoUpdate({
           target: productMaster.productKey,
           set: {
+            productMaker: sql`COALESCE(NULLIF(excluded.product_maker, ''), ${productMaster.productMaker})`,
             category: sql`COALESCE(NULLIF(NULLIF(excluded.category, ''), ${PDF_DEFAULT_CATEGORY}), ${productMaster.category})`,
             lastUpdatedAt: new Date(),
             lastSourceType: "PDF",
@@ -433,6 +469,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         })
         .returning({
           productId: productMaster.productId,
+          productMaker: productMaster.productMaker,
           spec: productMaster.spec,
           productName: productMaster.productName,
           productKey: productMaster.productKey,
@@ -445,6 +482,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         productMap.set(context.productKeyCandidate, {
           productId: upserted.productId,
           productKey: upserted.productKey,
+          productMaker: upserted.productMaker ?? null,
           productName: upserted.productName,
           spec: upserted.spec ?? null,
           defaultUnitPrice: upserted.defaultUnitPrice ?? null,
@@ -455,6 +493,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         productMap.set(context.productKeyCandidate, {
           productId,
           productKey: context.productKeyCandidate,
+          productMaker: context.productMaker,
           productName: context.productNameRaw,
           spec: context.specRaw,
           defaultUnitPrice: context.unitPrice,
@@ -478,7 +517,9 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
 
     lineContexts.forEach((context) => {
       if (!context.matchedProductId) {
-        const match = productMap.get(context.productKeyCandidate);
+        const match =
+          productMap.get(context.productKeyCandidate) ??
+          productMap.get(context.legacyProductKeyCandidate);
         if (match) {
           context.matchedProductId = match.productId;
           context.matchedProductSpec = match.spec ?? null;

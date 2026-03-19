@@ -9,6 +9,7 @@ export const invoiceSchema = z.object({
     .array(
       z.object({
         lineNo: z.number().int().positive(),
+        productMaker: z.string().trim().nullable().optional(),
         productName: z.string().trim().min(1),
         spec: z.string().trim().nullable(),
         quantity: z.number().nullable(),
@@ -33,6 +34,7 @@ export const invoiceResponseSchema = {
         type: "object",
         properties: {
           lineNo: { type: "number" },
+          productMaker: { type: ["string", "null"] },
           productName: { type: "string" },
           spec: { type: ["string", "null"] },
           quantity: { type: ["number", "null"] },
