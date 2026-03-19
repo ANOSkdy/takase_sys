@@ -333,6 +333,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
             <tr>
               <Th>品名</Th>
               <Th>規格</Th>
+              <Th>メーカー</Th>
               <Th align="right">価格</Th>
               <Th>ベンダー</Th>
               <Th>最終更新日</Th>
@@ -356,6 +357,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
               >
                 <Td>{r.productName}</Td>
                 <Td muted>{r.spec ?? "-"}</Td>
+                <Td muted>{r.productMaker ?? ""}</Td>
                 <Td align="right">{formatYen(r.unitPrice)}</Td>
                 <Td>{r.vendorName}</Td>
                 <Td>{formatDate(r.lastUpdatedOn)}</Td>
@@ -364,7 +366,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
+                <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
                   条件に一致するレコードがありません。
                 </td>
               </tr>

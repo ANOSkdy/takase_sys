@@ -40,6 +40,7 @@ export type EditableRecord = {
   productId: string;
   productName: string;
   spec: string | null;
+  productMaker: string | null;
   category: string | null;
   vendorName: string;
   unitPrice: number;
@@ -61,6 +62,7 @@ function toRecord(row: {
   productId: string;
   productName: string;
   spec: string | null;
+  productMaker: string | null;
   category: string | null;
   vendorName: string;
   unitPrice: string | number;
@@ -72,6 +74,7 @@ function toRecord(row: {
     productId: row.productId,
     productName: row.productName,
     spec: row.spec,
+    productMaker: row.productMaker,
     category: row.category,
     vendorName: row.vendorName,
     unitPrice: Number(row.unitPrice),
@@ -88,6 +91,7 @@ export async function getRecordById(recordId: string): Promise<EditableRecord | 
       productId: string;
       productName: string;
       spec: string | null;
+      productMaker: string | null;
       category: string | null;
       vendorName: string;
       unitPrice: string | number;
@@ -100,6 +104,7 @@ export async function getRecordById(recordId: string): Promise<EditableRecord | 
       pm.product_id AS "productId",
       pm.product_name AS "productName",
       pm.spec AS "spec",
+      pm.product_maker AS "productMaker",
       pm.category AS "category",
       vp.vendor_name AS "vendorName",
       vp.unit_price AS "unitPrice",
@@ -157,6 +162,7 @@ export async function updateRecordById(
       productId: string;
       productName: string;
       spec: string | null;
+      productMaker: string | null;
       category: string | null;
       vendorName: string;
       unitPrice: string | number;
@@ -169,6 +175,7 @@ export async function updateRecordById(
       pm.product_id AS "productId",
       pm.product_name AS "productName",
       pm.spec AS "spec",
+      pm.product_maker AS "productMaker",
       pm.category AS "category",
       vp.vendor_name AS "vendorName",
       vp.unit_price AS "unitPrice",

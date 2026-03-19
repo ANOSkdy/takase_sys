@@ -50,6 +50,7 @@ export type RecordRow = {
   productId: string;
   productName: string;
   spec: string | null;
+  productMaker: string | null;
   category: string | null;
   vendorName: string;
   unitPrice: number;
@@ -72,6 +73,7 @@ type DbRow = {
   productId: string;
   productName: string;
   spec: string | null;
+  productMaker: string | null;
   category: string | null;
   vendorName: string;
   unitPrice: string | number;
@@ -165,6 +167,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
       pm.product_id AS "productId",
       pm.product_name AS "productName",
       pm.spec AS "spec",
+      pm.product_maker AS "productMaker",
       pm.category AS "category",
       vp.vendor_name AS "vendorName",
       vp.unit_price AS "unitPrice",
@@ -200,6 +203,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     productId: r.productId,
     productName: r.productName,
     spec: r.spec ?? null,
+    productMaker: r.productMaker ?? null,
     category: r.category ?? null,
     vendorName: r.vendorName,
     unitPrice: Number(r.unitPrice),
