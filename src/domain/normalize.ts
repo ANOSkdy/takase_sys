@@ -6,9 +6,15 @@ export function normalizeText(input: string): string {
     .trim();
 }
 
-export function makeProductKey(productName: string, spec?: string | null): string {
+export function makeProductKey(
+  productName: string,
+  spec?: string | null,
+  productMaker?: string | null,
+): string {
   const nameNormalized = normalizeText(productName);
   if (!nameNormalized) return "";
+  const makerNormalized = productMaker ? normalizeText(productMaker) : "";
   const specNormalized = spec ? normalizeText(spec) : "";
-  return specNormalized ? `${nameNormalized}｜${specNormalized}` : nameNormalized;
+  const namePart = makerNormalized ? `${makerNormalized}｜${nameNormalized}` : nameNormalized;
+  return specNormalized ? `${namePart}｜${specNormalized}` : namePart;
 }

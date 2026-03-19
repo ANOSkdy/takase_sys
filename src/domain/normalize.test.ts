@@ -16,6 +16,10 @@ describe("makeProductKey", () => {
     expect(makeProductKey("商品A", "規格B")).toBe("商品A｜規格B");
   });
 
+  it("prefixes maker when present", () => {
+    expect(makeProductKey("商品A", "規格B", "メーカーC")).toBe("メーカーC｜商品A｜規格B");
+  });
+
   it("returns name only when spec missing", () => {
     expect(makeProductKey("商品A", null)).toBe("商品A");
   });

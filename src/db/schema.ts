@@ -14,6 +14,7 @@
 export const productMaster = pgTable("product_master", {
   productId: uuid("product_id").primaryKey(),
   productKey: text("product_key").notNull(),
+  productMaker: text("product_maker"),
   productName: text("product_name").notNull(),
   spec: text("spec"),
   category: text("category"),
@@ -75,6 +76,7 @@ export const documentLineItems = pgTable("document_line_items", {
   lineItemId: uuid("line_item_id").primaryKey(),
   parseRunId: uuid("parse_run_id").notNull(),
   lineNo: integer("line_no").notNull(),
+  productMaker: text("product_maker"),
   productNameRaw: text("product_name_raw"),
   specRaw: text("spec_raw"),
   productKeyCandidate: text("product_key_candidate"),
