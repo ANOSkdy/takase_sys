@@ -374,16 +374,19 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           .where(inArray(productMaster.productKey, productKeys))
       : [];
 
-    const productMap = new Map<string, {
-      productId: string;
-      productKey: string;
-      productMaker: string | null;
-      productName: string;
-      spec: string | null;
-      defaultUnitPrice: string | null;
-      qualityFlag: string;
-      category: string | null;
-    }>();
+    const productMap = new Map<
+      string,
+      {
+        productId: string;
+        productKey: string;
+        productMaker: string | null;
+        productName: string;
+        spec: string | null;
+        defaultUnitPrice: string | null;
+        qualityFlag: string;
+        category: string | null;
+      }
+    >();
     for (const row of productRows) {
       if (productMap.has(row.productKey)) continue;
       productMap.set(row.productKey, {
