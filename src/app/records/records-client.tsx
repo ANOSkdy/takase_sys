@@ -37,6 +37,7 @@ type FormState = {
 
 type EditFormState = {
   productName: string;
+  productMaker: string;
   spec: string;
   category: string;
   vendorName: string;
@@ -88,6 +89,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   }, [sp]);
 
   const editId = sp.get("edit");
+  const isNewMode = sp.get("new") !== null;
   const activeRecord = editId ? (items.find((item) => item.recordId === editId) ?? null) : null;
 
   const page = Number(sp.get("page") ?? "1");
@@ -378,6 +380,16 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
       {activeRecord && (
         <RecordEditModal record={activeRecord} onClose={closeEdit} onUpdated={handleUpdated} />
       )}
+      {isNewMode && (
+        <RecordCreateModal
+          onClose={() => router.push(`/records?${withParam(sp, { new: "" })}`)}
+          onCreated={(created) => {
+            setItems((prev) => [created, ...prev]);
+            router.push(`/records?${withParam(sp, { new: "" })}`);
+            router.refresh();
+          }}
+        />
+      )}
 
       <style jsx>{`
         @media (max-width: 840px) {
@@ -404,6 +416,7 @@ function RecordEditModal({
 }) {
   const [form, setForm] = useState<EditFormState>({
     productName: record.productName,
+    productMaker: record.productMaker ?? "",
     spec: record.spec ?? "",
     category: record.category ?? "",
     vendorName: record.vendorName,
@@ -434,6 +447,7 @@ function RecordEditModal({
         const latest = (await res.json()) as RecordRow;
         setForm({
           productName: latest.productName,
+          productMaker: latest.productMaker ?? "",
           spec: latest.spec ?? "",
           category: latest.category ?? "",
           vendorName: latest.vendorName,
@@ -470,6 +484,7 @@ function RecordEditModal({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           productName: form.productName,
+          productMaker: form.productMaker,
           spec: form.spec,
           category: form.category,
           vendorName: form.vendorName,
@@ -516,6 +531,12 @@ function RecordEditModal({
             error={fieldErrors.spec?.[0]}
           />
           <Field
+            label="メーカー"
+            value={form.productMaker}
+            onChange={(v) => setForm({ ...form, productMaker: v })}
+            error={fieldErrors.productMaker?.[0]}
+          />
+          <Field
             label="カテゴリ"
             value={form.category}
             onChange={(v) => setForm({ ...form, category: v })}
@@ -558,6 +579,151 @@ function RecordEditModal({
             </button>
             <button type="submit" style={btnPrimary} disabled={busy}>
               {busy ? "更新中..." : "更新"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function RecordCreateModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (record: RecordRow) => void;
+}) {
+  const [form, setForm] = useState<EditFormState>({
+    productName: "",
+    productMaker: "",
+    spec: "",
+    category: "",
+    vendorName: "",
+    unitPrice: "",
+    priceUpdatedOn: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const productNameRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    productNameRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [busy, onClose]);
+
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setErrorMessage(null);
+    setFieldErrors({});
+
+    try {
+      const res = await fetch("/api/records", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          productName: form.productName,
+          productMaker: form.productMaker,
+          spec: form.spec,
+          category: form.category,
+          vendorName: form.vendorName,
+          unitPrice: form.unitPrice,
+          priceUpdatedOn: form.priceUpdatedOn || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const problem = (await res.json().catch(() => null)) as ApiProblem | null;
+        setErrorMessage(problem?.detail ?? "登録に失敗しました。入力内容を確認してください。");
+        setFieldErrors(problem?.errors?.fieldErrors ?? {});
+        return;
+      }
+
+      const created = (await res.json()) as RecordRow;
+      onCreated(created);
+    } catch {
+      setErrorMessage("通信エラーが発生しました。時間をおいて再度お試しください。");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={modalBackdrop} role="dialog" aria-modal="true" onClick={() => !busy && onClose()}>
+      <div style={modalPanel} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>新規登録</h3>
+        <form onSubmit={create} style={{ display: "grid", gap: "var(--space-3)" }}>
+          <Field
+            label="品名"
+            value={form.productName}
+            onChange={(v) => setForm({ ...form, productName: v })}
+            error={fieldErrors.productName?.[0]}
+            inputRef={productNameRef}
+          />
+          <Field
+            label="規格"
+            value={form.spec}
+            onChange={(v) => setForm({ ...form, spec: v })}
+            error={fieldErrors.spec?.[0]}
+          />
+          <Field
+            label="メーカー"
+            value={form.productMaker}
+            onChange={(v) => setForm({ ...form, productMaker: v })}
+            error={fieldErrors.productMaker?.[0]}
+          />
+          <Field
+            label="カテゴリ"
+            value={form.category}
+            onChange={(v) => setForm({ ...form, category: v })}
+            error={fieldErrors.category?.[0]}
+          />
+          <Field
+            label="ベンダー"
+            value={form.vendorName}
+            onChange={(v) => setForm({ ...form, vendorName: v })}
+            error={fieldErrors.vendorName?.[0]}
+          />
+          <Field
+            label="価格"
+            value={form.unitPrice}
+            onChange={(v) => setForm({ ...form, unitPrice: v })}
+            error={fieldErrors.unitPrice?.[0]}
+          />
+          <div style={{ display: "grid", gap: "var(--space-2)" }}>
+            <label style={{ fontSize: 12, color: "var(--muted)" }}>価格更新日</label>
+            <input
+              type="date"
+              value={form.priceUpdatedOn}
+              onChange={(e) => setForm({ ...form, priceUpdatedOn: e.target.value })}
+              style={inputStyle}
+            />
+            {fieldErrors.priceUpdatedOn?.[0] && (
+              <p style={{ margin: 0, color: "var(--color-danger)", fontSize: 12 }}>
+                {fieldErrors.priceUpdatedOn[0]}
+              </p>
+            )}
+          </div>
+
+          {errorMessage && (
+            <p style={{ margin: 0, color: "var(--color-danger)" }}>{errorMessage}</p>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--space-2)" }}>
+            <button type="button" style={btnSecondary} onClick={onClose} disabled={busy}>
+              キャンセル
+            </button>
+            <button type="submit" style={btnPrimary} disabled={busy}>
+              {busy ? "登録中..." : "登録"}
             </button>
           </div>
         </form>

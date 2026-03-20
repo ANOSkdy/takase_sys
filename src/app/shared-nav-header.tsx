@@ -32,6 +32,15 @@ export default function SharedNavHeader() {
       </button>
 
       <nav id={menuId} className={`${styles.nav} ${open ? styles.navOpen : ""}`}>
+        {pathname === "/records" && (
+          <Link
+            href="/records?new=1"
+            className={`${styles.navLink} ${styles.navLinkAction}`}
+            onClick={() => setOpen(false)}
+          >
+            新規登録
+          </Link>
+        )}
         {links.map((link) => {
           const active = pathname === link.href;
           return (

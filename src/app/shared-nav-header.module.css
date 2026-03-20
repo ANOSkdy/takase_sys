@@ -71,6 +71,10 @@
   border: 1px solid var(--border);
 }
 
+.navLinkAction {
+  border-color: var(--color-primary);
+}
+
 .navLinkActive {
   border-color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 12%, var(--surface));
