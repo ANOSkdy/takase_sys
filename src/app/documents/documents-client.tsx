@@ -353,7 +353,7 @@ export default function DocumentsClient({
   };
 
   return (
-    <section style={{ display: "grid", gap: "var(--space-4)" }}>
+    <section style={{ display: "grid", gap: "var(--space-4)", minWidth: 0 }}>
       <div style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>アップロード</h2>
         <FileDropzone onFiles={handleFiles} disabled={busy} maxPdfMb={maxPdfMb} />
@@ -375,7 +375,9 @@ export default function DocumentsClient({
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
               {uploads.map((u) => (
                 <li key={u.id} style={uploadRowStyle}>
-                  <span>{u.fileName}</span>
+                  <span style={uploadFileNameStyle} title={u.fileName}>
+                    {u.fileName}
+                  </span>
                   <span style={uploadStatusStyle(u.status)}>{u.message}</span>
                 </li>
               ))}
@@ -464,14 +466,26 @@ export default function DocumentsClient({
                       }
                     />
                   </Td>
-                  <Td>{renderFileName(item)}</Td>
+                  <Td>
+                    <span style={fileNameStyle} title={renderFileName(item)}>
+                      {renderFileName(item)}
+                    </span>
+                  </Td>
                   <Td muted>{formatDateTime(item.uploadedAt)}</Td>
                   <Td>
                     <StatusChip status={item.status} />
                   </Td>
-                  <Td>{item.vendorName ?? "-"}</Td>
+                  <Td>
+                    <span style={textClampStyle} title={item.vendorName ?? "-"}>
+                      {item.vendorName ?? "-"}
+                    </span>
+                  </Td>
                   <Td muted>{item.invoiceDate ? formatDate(item.invoiceDate) : "-"}</Td>
-                  <Td muted>{item.uploadNote ?? "-"}</Td>
+                  <Td muted>
+                    <span style={textClampStyle} title={item.uploadNote ?? "-"}>
+                      {item.uploadNote ?? "-"}
+                    </span>
+                  </Td>
                   <Td>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <button
@@ -719,6 +733,7 @@ const cardStyle: CSSProperties = {
   borderRadius: "var(--radius-lg)",
   boxShadow: "var(--shadow-soft)",
   padding: "var(--space-4)",
+  minWidth: 0,
 };
 
 const dropzoneStyle: CSSProperties = {
@@ -814,10 +829,11 @@ const tableWrapperStyle: CSSProperties = {
   width: "100%",
   overflowX: "auto",
   marginTop: "var(--space-2)",
+  minWidth: 0,
 };
 
 const tableStyle: CSSProperties = {
-  width: "100%",
+  width: "max-content",
   minWidth: 1120,
   borderCollapse: "separate",
   borderSpacing: 0,
@@ -841,9 +857,33 @@ const uploadRowStyle: CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   gap: "var(--space-2)",
+  alignItems: "center",
   padding: "8px 12px",
   borderRadius: "var(--radius-md)",
   background: "rgba(0,0,0,0.03)",
+  minWidth: 0,
+};
+
+const uploadFileNameStyle: CSSProperties = {
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const fileNameStyle: CSSProperties = {
+  display: "inline-block",
+  maxWidth: 320,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  verticalAlign: "top",
+};
+
+const textClampStyle: CSSProperties = {
+  display: "inline-block",
+  maxWidth: 220,
+  overflowWrap: "anywhere",
 };
 
 const modalBackdrop: CSSProperties = {
