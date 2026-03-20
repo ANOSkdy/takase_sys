@@ -811,12 +811,14 @@ const selectedCountStyle: CSSProperties = {
 };
 
 const tableWrapperStyle: CSSProperties = {
+  width: "100%",
   overflowX: "auto",
   marginTop: "var(--space-2)",
 };
 
 const tableStyle: CSSProperties = {
   width: "100%",
+  minWidth: 1120,
   borderCollapse: "separate",
   borderSpacing: 0,
   background: "var(--surface)",
