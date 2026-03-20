@@ -25,13 +25,6 @@ export const updateRecordSchema = z.object({
     .nullable()
     .optional()
     .transform((v) => (v && v.length > 0 ? v : null)),
-  category: z
-    .string()
-    .trim()
-    .max(200)
-    .nullable()
-    .optional()
-    .transform((v) => (v && v.length > 0 ? v : null)),
   vendorName: z.string().trim().min(1).max(200),
   unitPrice: z.coerce.number().nonnegative().max(999999999),
   priceUpdatedOn: z
@@ -184,7 +177,6 @@ export async function updateRecordById(
       product_name = ${payload.productName},
       product_maker = ${payload.productMaker ?? null},
       spec = ${payload.spec ?? null},
-      category = ${payload.category ?? null},
       last_updated_at = now()
     WHERE product_id = ${productId}
   `;

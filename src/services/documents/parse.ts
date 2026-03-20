@@ -17,7 +17,6 @@ import { shouldBlockUpdate } from "@/domain/update-policy";
 import { getStorageProvider } from "@/services/storage";
 import { parseInvoiceFromPdf } from "@/services/ai/gemini";
 import { assertSinglePagePdf } from "@/services/documents/parse-guard";
-import { PDF_DEFAULT_CATEGORY, resolveCategory } from "@/services/documents/category";
 import { PROMPT_VERSION } from "@/services/ai/prompt";
 
 type ParseRunInsert = typeof documentParseRuns.$inferInsert;
@@ -45,7 +44,6 @@ type LineItemContext = {
   systemConfidenceNum: number | null;
   matchedProductId: string | null;
   matchedProductSpec: string | null;
-  matchedProductCategory: string | null;
 };
 
 type VendorPriceRow = {
@@ -151,7 +149,6 @@ function buildProductRow(input: {
   productMaker: string | null;
   productName: string;
   spec: string | null;
-  category: string | null;
   defaultUnitPrice: string | null;
   qualityFlag: string;
   sourceId: string;
@@ -162,7 +159,6 @@ function buildProductRow(input: {
     productMaker: input.productMaker,
     productName: input.productName,
     spec: input.spec,
-    category: resolveCategory({ existing: null, incoming: input.category }),
     defaultUnitPrice: input.defaultUnitPrice,
     qualityFlag: input.qualityFlag,
     lastUpdatedAt: new Date(),
@@ -367,7 +363,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
             spec: productMaster.spec,
             defaultUnitPrice: productMaster.defaultUnitPrice,
             qualityFlag: productMaster.qualityFlag,
-            category: productMaster.category,
           })
           .from(productMaster)
           .orderBy(desc(productMaster.lastUpdatedAt), asc(productMaster.productId))
@@ -384,7 +379,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         spec: string | null;
         defaultUnitPrice: string | null;
         qualityFlag: string;
-        category: string | null;
       }
     >();
     for (const row of productRows) {
@@ -397,7 +391,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         spec: row.spec ?? null,
         defaultUnitPrice: row.defaultUnitPrice ?? null,
         qualityFlag: row.qualityFlag,
-        category: row.category ?? null,
       });
     }
 
@@ -446,7 +439,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         systemConfidenceNum,
         matchedProductId: matched?.productId ?? null,
         matchedProductSpec: matched?.spec ?? null,
-        matchedProductCategory: matched?.category ?? null,
       });
     });
 
@@ -463,7 +455,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         productMaker: context.productMaker,
         productName: context.productNameRaw,
         spec: context.specRaw,
-        category: null,
         defaultUnitPrice: context.unitPrice,
         qualityFlag,
         sourceId: parseRunId,
@@ -478,7 +469,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           productKey: productMaster.productKey,
           defaultUnitPrice: productMaster.defaultUnitPrice,
           qualityFlag: productMaster.qualityFlag,
-          category: productMaster.category,
         })
         .from(productMaster)
         .where(eq(productMaster.productKey, context.productKeyCandidate))
@@ -510,7 +500,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
               productKey: productMaster.productKey,
               defaultUnitPrice: productMaster.defaultUnitPrice,
               qualityFlag: productMaster.qualityFlag,
-              category: productMaster.category,
             })
         : await tx.insert(productMaster).values(productRow).returning({
             productId: productMaster.productId,
@@ -520,7 +509,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
             productKey: productMaster.productKey,
             defaultUnitPrice: productMaster.defaultUnitPrice,
             qualityFlag: productMaster.qualityFlag,
-            category: productMaster.category,
           });
 
       if (savedProduct) {
@@ -532,7 +520,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           spec: savedProduct.spec ?? null,
           defaultUnitPrice: savedProduct.defaultUnitPrice ?? null,
           qualityFlag: savedProduct.qualityFlag,
-          category: savedProduct.category ?? null,
         });
       } else {
         productMap.set(context.productKeyCandidate, {
@@ -543,7 +530,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           spec: context.specRaw,
           defaultUnitPrice: context.unitPrice,
           qualityFlag,
-          category: PDF_DEFAULT_CATEGORY,
         });
       }
 
@@ -568,7 +554,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         if (match) {
           context.matchedProductId = match.productId;
           context.matchedProductSpec = match.spec ?? null;
-          context.matchedProductCategory = match.category ?? null;
         }
       }
     });
