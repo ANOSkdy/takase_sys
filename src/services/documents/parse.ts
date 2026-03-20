@@ -151,6 +151,7 @@ function buildProductRow(input: {
   productMaker: string | null;
   productName: string;
   spec: string | null;
+  category: string | null;
   defaultUnitPrice: string | null;
   qualityFlag: string;
   sourceId: string;
@@ -161,7 +162,7 @@ function buildProductRow(input: {
     productMaker: input.productMaker,
     productName: input.productName,
     spec: input.spec,
-    category: resolveCategory({ existing: null, incoming: null }),
+    category: resolveCategory({ existing: null, incoming: input.category }),
     defaultUnitPrice: input.defaultUnitPrice,
     qualityFlag: input.qualityFlag,
     lastUpdatedAt: new Date(),
@@ -450,6 +451,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         productMaker: context.productMaker,
         productName: context.productNameRaw,
         spec: context.specRaw,
+        category: null,
         defaultUnitPrice: context.unitPrice,
         qualityFlag,
         sourceId: parseRunId,
@@ -462,7 +464,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           target: productMaster.productKey,
           set: {
             productMaker: sql`COALESCE(NULLIF(excluded.product_maker, ''), ${productMaster.productMaker})`,
-            category: sql`COALESCE(NULLIF(NULLIF(excluded.category, ''), ${PDF_DEFAULT_CATEGORY}), ${productMaster.category})`,
             lastUpdatedAt: new Date(),
             lastSourceType: "PDF",
             lastSourceId: parseRunId,
@@ -631,10 +632,6 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       }
       before.productId = context.matchedProductId;
       before.spec = context.matchedProductSpec;
-      if (context.matchedProductCategory) {
-        before.category = context.matchedProductCategory;
-        after.category = context.matchedProductCategory;
-      }
 
       let classification = "NO_CHANGE";
       if (requiresUpdate) {
