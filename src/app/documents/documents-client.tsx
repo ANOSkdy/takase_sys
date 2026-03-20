@@ -434,6 +434,16 @@ export default function DocumentsClient({
         )}
         <div style={tableWrapperStyle}>
           <table style={tableStyle}>
+            <colgroup>
+              <col style={{ width: 44 }} />
+              <col style={{ width: 320 }} />
+              <col style={{ width: 170 }} />
+              <col style={{ width: 120 }} />
+              <col style={{ width: 170 }} />
+              <col style={{ width: 120 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 196 }} />
+            </colgroup>
             <thead>
               <tr>
                 <Th>
@@ -833,8 +843,9 @@ const tableWrapperStyle: CSSProperties = {
 };
 
 const tableStyle: CSSProperties = {
-  width: "max-content",
-  minWidth: 1120,
+  width: 1300,
+  minWidth: 1300,
+  tableLayout: "fixed",
   borderCollapse: "separate",
   borderSpacing: 0,
   background: "var(--surface)",
@@ -882,8 +893,10 @@ const fileNameStyle: CSSProperties = {
 
 const textClampStyle: CSSProperties = {
   display: "inline-block",
-  maxWidth: 220,
-  overflowWrap: "anywhere",
+  maxWidth: "100%",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 };
 
 const modalBackdrop: CSSProperties = {
