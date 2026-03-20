@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   documentDiffItems,
@@ -370,24 +370,36 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
             category: productMaster.category,
           })
           .from(productMaster)
+          .orderBy(desc(productMaster.lastUpdatedAt), asc(productMaster.productId))
           .where(inArray(productMaster.productKey, productKeys))
       : [];
 
-    const productMap = new Map(
-      productRows.map((row) => [
-        row.productKey,
-        {
-          productId: row.productId,
-          productKey: row.productKey,
-          productMaker: row.productMaker ?? null,
-          productName: row.productName,
-          spec: row.spec ?? null,
-          defaultUnitPrice: row.defaultUnitPrice ?? null,
-          qualityFlag: row.qualityFlag,
-          category: row.category ?? null,
-        },
-      ]),
-    );
+    const productMap = new Map<
+      string,
+      {
+        productId: string;
+        productKey: string;
+        productMaker: string | null;
+        productName: string;
+        spec: string | null;
+        defaultUnitPrice: string | null;
+        qualityFlag: string;
+        category: string | null;
+      }
+    >();
+    for (const row of productRows) {
+      if (productMap.has(row.productKey)) continue;
+      productMap.set(row.productKey, {
+        productId: row.productId,
+        productKey: row.productKey,
+        productMaker: row.productMaker ?? null,
+        productName: row.productName,
+        spec: row.spec ?? null,
+        defaultUnitPrice: row.defaultUnitPrice ?? null,
+        qualityFlag: row.qualityFlag,
+        category: row.category ?? null,
+      });
+    }
 
     const lineContexts: LineItemContext[] = [];
 
@@ -457,19 +469,8 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         sourceId: parseRunId,
       });
 
-      const [upserted] = await tx
-        .insert(productMaster)
-        .values(productRow)
-        .onConflictDoUpdate({
-          target: productMaster.productKey,
-          set: {
-            productMaker: sql`COALESCE(NULLIF(excluded.product_maker, ''), ${productMaster.productMaker})`,
-            lastUpdatedAt: new Date(),
-            lastSourceType: "PDF",
-            lastSourceId: parseRunId,
-          },
-        })
-        .returning({
+      const [matchedExisting] = await tx
+        .select({
           productId: productMaster.productId,
           productMaker: productMaster.productMaker,
           spec: productMaster.spec,
@@ -478,18 +479,60 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           defaultUnitPrice: productMaster.defaultUnitPrice,
           qualityFlag: productMaster.qualityFlag,
           category: productMaster.category,
-        });
+        })
+        .from(productMaster)
+        .where(eq(productMaster.productKey, context.productKeyCandidate))
+        .orderBy(desc(productMaster.lastUpdatedAt), asc(productMaster.productId))
+        .limit(1);
 
-      if (upserted) {
+      const [savedProduct] = matchedExisting
+        ? await tx
+            .update(productMaster)
+            .set({
+              productMaker: sql`
+                CASE
+                  WHEN NULLIF(BTRIM(${productMaster.productMaker}), '') IS NULL
+                    AND NULLIF(BTRIM(${context.productMaker}), '') IS NOT NULL
+                  THEN ${context.productMaker}
+                  ELSE ${productMaster.productMaker}
+                END
+              `,
+              lastUpdatedAt: new Date(),
+              lastSourceType: "PDF",
+              lastSourceId: parseRunId,
+            })
+            .where(eq(productMaster.productId, matchedExisting.productId))
+            .returning({
+              productId: productMaster.productId,
+              productMaker: productMaster.productMaker,
+              spec: productMaster.spec,
+              productName: productMaster.productName,
+              productKey: productMaster.productKey,
+              defaultUnitPrice: productMaster.defaultUnitPrice,
+              qualityFlag: productMaster.qualityFlag,
+              category: productMaster.category,
+            })
+        : await tx.insert(productMaster).values(productRow).returning({
+            productId: productMaster.productId,
+            productMaker: productMaster.productMaker,
+            spec: productMaster.spec,
+            productName: productMaster.productName,
+            productKey: productMaster.productKey,
+            defaultUnitPrice: productMaster.defaultUnitPrice,
+            qualityFlag: productMaster.qualityFlag,
+            category: productMaster.category,
+          });
+
+      if (savedProduct) {
         productMap.set(context.productKeyCandidate, {
-          productId: upserted.productId,
-          productKey: upserted.productKey,
-          productMaker: upserted.productMaker ?? null,
-          productName: upserted.productName,
-          spec: upserted.spec ?? null,
-          defaultUnitPrice: upserted.defaultUnitPrice ?? null,
-          qualityFlag: upserted.qualityFlag,
-          category: upserted.category ?? null,
+          productId: savedProduct.productId,
+          productKey: savedProduct.productKey,
+          productMaker: savedProduct.productMaker ?? null,
+          productName: savedProduct.productName,
+          spec: savedProduct.spec ?? null,
+          defaultUnitPrice: savedProduct.defaultUnitPrice ?? null,
+          qualityFlag: savedProduct.qualityFlag,
+          category: savedProduct.category ?? null,
         });
       } else {
         productMap.set(context.productKeyCandidate, {
@@ -504,7 +547,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         });
       }
 
-      const historyProductId = upserted?.productId ?? productId;
+      const historyProductId = savedProduct?.productId ?? productId;
       const historyRow = buildUpdateHistoryRow({
         updateKey: `${parseRunId}:${historyProductId}:product_create`,
         productId: historyProductId,
