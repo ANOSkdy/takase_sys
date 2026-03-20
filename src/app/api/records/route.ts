@@ -1,5 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { recordSearchSchema, searchRecords } from "@/services/records/search";
+import { problemResponse } from "@/app/api/_utils/problem";
+import { createRecord, createRecordSchema } from "@/services/records/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,5 +35,20 @@ export async function GET(req: Request) {
     return NextResponse.json(data, { headers: noStoreHeaders });
   } catch {
     return problem(500, "Internal Server Error", "Failed to search records");
+  }
+}
+
+export async function POST(req: Request) {
+  const rawBody = await req.json().catch(() => null);
+  const parsedBody = createRecordSchema.safeParse(rawBody);
+  if (!parsedBody.success) {
+    return problemResponse(400, "Bad Request", "Invalid request body", parsedBody.error.flatten());
+  }
+
+  try {
+    const created = await createRecord(parsedBody.data);
+    return NextResponse.json(created, { status: 201, headers: noStoreHeaders });
+  } catch {
+    return problemResponse(500, "Internal Server Error", "Failed to create record");
   }
 }
