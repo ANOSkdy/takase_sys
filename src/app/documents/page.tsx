@@ -16,7 +16,13 @@ export default async function DocumentsPage() {
   return (
     <>
       <SharedNavHeader />
-      <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
+      <main
+        style={{
+          padding: "calc(64px + var(--space-4)) var(--space-6) var(--space-6)",
+          display: "grid",
+          gap: "var(--space-4)",
+        }}
+      >
         <header style={{ display: "grid", gap: "var(--space-2)" }}>
           <h1 style={{ margin: 0 }}>納品書PDF</h1>
           <p style={{ margin: 0, color: "var(--muted)" }}>
