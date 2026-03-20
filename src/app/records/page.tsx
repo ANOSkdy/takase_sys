@@ -1,5 +1,5 @@
-﻿import Link from "next/link";
 import RecordsSearchClient from "./records-client";
+import SharedNavHeader from "@/app/shared-nav-header";
 import { recordSearchSchema, searchRecords } from "@/services/records/search";
 
 export const runtime = "nodejs";
@@ -27,26 +27,15 @@ export default async function RecordsPage({
   const result = await searchRecords(params);
 
   return (
-    <main style={{ padding: "var(--space-6)" }}>
-      <header style={{ marginBottom: "var(--space-4)" }}>
-        <h1 style={{ margin: 0 }}>仕切り表</h1>
-        <Link
-          href="/documents"
-          style={{
-            marginTop: "var(--space-2)",
-            display: "inline-block",
-            color: "inherit",
-            textDecoration: "none",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-md)",
-            padding: "0.5rem 0.75rem",
-          }}
-        >
-          納品書PDFへ
-        </Link>
-      </header>
+    <>
+      <SharedNavHeader />
+      <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
+        <header style={{ marginBottom: "var(--space-2)" }}>
+          <h1 style={{ margin: 0 }}>仕切り表</h1>
+        </header>
 
-      <RecordsSearchClient result={result} />
-    </main>
+        <RecordsSearchClient result={result} />
+      </main>
+    </>
   );
 }
