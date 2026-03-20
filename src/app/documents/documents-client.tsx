@@ -43,13 +43,6 @@ const jstDateTimeFormatter = new Intl.DateTimeFormat("ja-JP", {
   minute: "2-digit",
 });
 
-const jstDateFormatter = new Intl.DateTimeFormat("ja-JP", {
-  timeZone: "Asia/Tokyo",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
 function sanitizeFilename(name: string): string {
   const base = name.replace(/[\/\\]/g, "_").replace(/[\u0000-\u001f\u007f]/g, "");
   const trimmed = base.trim().slice(0, 180);
@@ -440,8 +433,6 @@ export default function DocumentsClient({
               <col style={{ width: 170 }} />
               <col style={{ width: 120 }} />
               <col style={{ width: 170 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 160 }} />
               <col style={{ width: 196 }} />
             </colgroup>
             <thead>
@@ -458,8 +449,6 @@ export default function DocumentsClient({
                 <Th>アップロード日時</Th>
                 <Th>ステータス</Th>
                 <Th>仕入先</Th>
-                <Th>請求日</Th>
-                <Th>メモ</Th>
                 <Th>操作</Th>
               </tr>
             </thead>
@@ -488,12 +477,6 @@ export default function DocumentsClient({
                   <Td>
                     <span style={textClampStyle} title={item.vendorName ?? "-"}>
                       {item.vendorName ?? "-"}
-                    </span>
-                  </Td>
-                  <Td muted>{item.invoiceDate ? formatDate(item.invoiceDate) : "-"}</Td>
-                  <Td muted>
-                    <span style={textClampStyle} title={item.uploadNote ?? "-"}>
-                      {item.uploadNote ?? "-"}
                     </span>
                   </Td>
                   <Td>
@@ -526,7 +509,7 @@ export default function DocumentsClient({
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={6}
                     style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
                   >
                     まだアップロードされたPDFがありません。
@@ -729,12 +712,6 @@ function formatDateTime(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "-";
   return jstDateTimeFormatter.format(date);
-}
-
-function formatDate(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "-";
-  return jstDateFormatter.format(date);
 }
 
 const cardStyle: CSSProperties = {
