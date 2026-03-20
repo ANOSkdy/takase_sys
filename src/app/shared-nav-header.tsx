@@ -15,7 +15,6 @@ export default function SharedNavHeader() {
   const [open, setOpen] = useState(false);
   const menuId = useId();
 
-
   return (
     <header className={styles.header}>
       <div className={styles.brand}>タカセシステム</div>
