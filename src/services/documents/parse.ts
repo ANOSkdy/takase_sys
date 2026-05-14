@@ -515,6 +515,11 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
     if (lineItemRows.length) {
       await tx.insert(documentLineItems).values(lineItemRows);
     }
+    console.info("document_parse_line_items_inserted", {
+      documentId,
+      parseRunId,
+      count: lineItemRows.length,
+    });
 
     const matchedProductIds = lineContexts
       .map((context) => context.matchedProductId)
@@ -713,6 +718,11 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
     if (diffRows.length) {
       await tx.insert(documentDiffItems).values(diffRows);
     }
+    console.info("document_parse_diff_items_inserted", {
+      documentId,
+      parseRunId,
+      count: diffRows.length,
+    });
 
     await tx
       .update(documents)
@@ -740,6 +750,14 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         },
       })
       .where(eq(documentParseRuns.parseRunId, parseRunId));
+
+    console.info("document_parse_completed", {
+      documentId,
+      parseRunId,
+      status: "SUCCEEDED",
+      lineItemCount: lineContexts.length,
+      diffCount: diffRows.length,
+    });
   });
 
   return { parseRunId, status: "SUCCEEDED" };
