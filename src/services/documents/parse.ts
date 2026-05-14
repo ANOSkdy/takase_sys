@@ -27,8 +27,11 @@ type UpdateHistoryInsert = typeof updateHistory.$inferInsert;
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const noLineItemsErrorCode = "NO_LINE_ITEMS_EXTRACTED";
+const noUsableLineItemsErrorCode = "NO_USABLE_LINE_ITEMS_EXTRACTED";
 const noLineItemsSummary =
   "PDFから明細を抽出できませんでした。明細表が写っているか、スキャン品質やPDF内容を確認してください。";
+const noUsableLineItemsSummary =
+  "PDFから明細候補は抽出されましたが、商品名・商品キーを作成できる明細がありませんでした。明細の品名欄やPDF品質を確認してください。";
 
 type LineItemContext = {
   lineItemId: string;
@@ -235,6 +238,31 @@ async function getDocumentRow(documentId: string): Promise<DocumentRow | null> {
   return row ?? null;
 }
 
+async function failParseRun(input: {
+  documentId: string;
+  parseRunId: string;
+  errorDetail: string;
+  summary: string;
+  stats: Record<string, unknown>;
+}) {
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(documentParseRuns)
+      .set({
+        status: "FAILED",
+        finishedAt: new Date(),
+        errorDetail: input.errorDetail,
+        stats: input.stats,
+      })
+      .where(eq(documentParseRuns.parseRunId, input.parseRunId));
+    await tx
+      .update(documents)
+      .set({ status: "FAILED", parseErrorSummary: input.summary })
+      .where(eq(documents.documentId, input.documentId));
+  });
+}
+
 export async function parseDocument(documentId: string): Promise<ParseDocumentResult> {
   const documentRow = await getDocumentRow(documentId);
   if (!documentRow || documentRow.isDeleted) {
@@ -296,15 +324,15 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       detail === "PARSE_ERROR"
         ? "解析に失敗しました。"
         : "1ページPDFのみ解析可能です。アップロードをやり直してください。";
-    await db.transaction(async (tx) => {
-      await tx
-        .update(documentParseRuns)
-        .set({ status: "FAILED", finishedAt: new Date(), errorDetail: detail })
-        .where(eq(documentParseRuns.parseRunId, parseRunId));
-      await tx
-        .update(documents)
-        .set({ status: "FAILED", parseErrorSummary: summary })
-        .where(eq(documents.documentId, documentId));
+    await failParseRun({
+      documentId,
+      parseRunId,
+      errorDetail: detail,
+      summary,
+      stats: {
+        pageCount,
+        processedPages: 0,
+      },
     });
     throw error;
   }
@@ -319,25 +347,18 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
   });
 
   if (rawLineItemCount === 0) {
-    await db.transaction(async (tx) => {
-      await tx
-        .update(documentParseRuns)
-        .set({
-          status: "FAILED",
-          finishedAt: new Date(),
-          errorDetail: noLineItemsErrorCode,
-          stats: {
-            lineItemCount: 0,
-            diffCount: 0,
-            pageCount,
-            processedPages: 1,
-          },
-        })
-        .where(eq(documentParseRuns.parseRunId, parseRunId));
-      await tx
-        .update(documents)
-        .set({ status: "FAILED", parseErrorSummary: noLineItemsSummary })
-        .where(eq(documents.documentId, documentId));
+    await failParseRun({
+      documentId,
+      parseRunId,
+      errorDetail: noLineItemsErrorCode,
+      summary: noLineItemsSummary,
+      stats: {
+        rawLineItemCount: 0,
+        lineItemCount: 0,
+        diffCount: 0,
+        pageCount,
+        processedPages: 1,
+      },
     });
 
     throw new Error(noLineItemsErrorCode);
@@ -458,6 +479,36 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         matchedProductCategory: matched?.category ?? null,
       });
     });
+
+    console.info("document_parse_normalized", {
+      documentId,
+      parseRunId,
+      rawLineItemCount,
+      lineItemCount: lineContexts.length,
+    });
+
+    if (lineContexts.length === 0) {
+      await tx
+        .update(documentParseRuns)
+        .set({
+          status: "FAILED",
+          finishedAt: new Date(),
+          errorDetail: noUsableLineItemsErrorCode,
+          stats: {
+            rawLineItemCount,
+            lineItemCount: 0,
+            diffCount: 0,
+            pageCount,
+            processedPages: 1,
+          },
+        })
+        .where(eq(documentParseRuns.parseRunId, parseRunId));
+      await tx
+        .update(documents)
+        .set({ status: "FAILED", parseErrorSummary: noUsableLineItemsSummary })
+        .where(eq(documents.documentId, documentId));
+      return;
+    }
 
     const lineItemRows = lineContexts.map((context) =>
       buildLineItemRow({ ...context, parseRunId }),
@@ -680,6 +731,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         status: "SUCCEEDED",
         finishedAt: new Date(),
         stats: {
+          rawLineItemCount,
           lineItemCount: lineContexts.length,
           diffCount: diffRows.length,
           pageCount,
