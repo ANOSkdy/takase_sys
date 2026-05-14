@@ -38,9 +38,15 @@ function getReasonLabel(reason: string | null) {
       return "既存商品への紐づけ、またはカテゴリ選択付き新規登録が必要です。";
     case "NO_PRODUCT_MATCH":
       return "既存商品に一致しませんでした。";
+    case "LINKED_TO_EXISTING_PRODUCT":
+      return "既存商品に紐づけ済みです。";
     default:
       return reason ?? "-";
   }
+}
+
+function canLinkProduct(classification: string) {
+  return classification === "NEW_CANDIDATE" || classification === "UNMATCHED";
 }
 
 type SearchParams = { classification?: string };
@@ -187,6 +193,7 @@ export default async function DocumentDiffPage({
                 <Th>請求日</Th>
                 <Th>Before</Th>
                 <Th>After</Th>
+                <Th>操作</Th>
               </tr>
             </thead>
             <tbody>
@@ -202,12 +209,24 @@ export default async function DocumentDiffPage({
                   <Td muted>
                     <pre style={preStyle}>{JSON.stringify(item.after, null, 2)}</pre>
                   </Td>
+                  <Td>
+                    {canLinkProduct(item.classification) ? (
+                      <a
+                        href={`/documents/${documentId}/diff/${item.diffItemId}/link`}
+                        style={linkButtonStyle}
+                      >
+                        既存商品に紐づける
+                      </a>
+                    ) : (
+                      <span style={{ color: "var(--muted)" }}>-</span>
+                    )}
+                  </Td>
                 </tr>
               ))}
               {filteredDiffItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
                   >
                     差分はまだありません。
@@ -264,6 +283,18 @@ const backLinkStyle: CSSProperties = {
   borderRadius: "var(--radius-md)",
   padding: "6px 10px",
   fontSize: 13,
+};
+
+const linkButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 10px",
+  borderRadius: "var(--radius-md)",
+  border: "1px solid var(--border)",
+  color: "var(--text)",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
 };
 
 function Th({ children }: { children: ReactNode }) {
