@@ -92,7 +92,6 @@ function buildLineItemRow(input: LineItemContext & { parseRunId: string }): Line
     lineItemId: input.lineItemId,
     parseRunId: input.parseRunId,
     lineNo: input.lineNo,
-    productMaker: input.productMaker,
     productNameRaw: input.productNameRaw,
     specRaw: input.specRaw,
     productKeyCandidate: input.productKeyCandidate,
