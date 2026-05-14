@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   documentDiffItems,
@@ -23,10 +23,15 @@ type ParseRunInsert = typeof documentParseRuns.$inferInsert;
 type LineItemInsert = typeof documentLineItems.$inferInsert;
 type DiffItemInsert = typeof documentDiffItems.$inferInsert;
 type VendorPriceInsert = typeof vendorPrices.$inferInsert;
-type ProductInsert = typeof productMaster.$inferInsert;
 type UpdateHistoryInsert = typeof updateHistory.$inferInsert;
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const noLineItemsErrorCode = "NO_LINE_ITEMS_EXTRACTED";
+const noUsableLineItemsErrorCode = "NO_USABLE_LINE_ITEMS_EXTRACTED";
+const noLineItemsSummary =
+  "PDFから明細を抽出できませんでした。明細表が写っているか、スキャン品質やPDF内容を確認してください。";
+const noUsableLineItemsSummary =
+  "PDFから明細候補は抽出されましたが、商品名・商品キーを作成できる明細がありませんでした。明細の品名欄やPDF品質を確認してください。";
 
 type LineItemContext = {
   lineItemId: string;
@@ -44,6 +49,7 @@ type LineItemContext = {
   systemConfidenceNum: number | null;
   matchedProductId: string | null;
   matchedProductSpec: string | null;
+  matchedProductCategory: string | null;
 };
 
 type VendorPriceRow = {
@@ -86,7 +92,6 @@ function buildLineItemRow(input: LineItemContext & { parseRunId: string }): Line
     lineItemId: input.lineItemId,
     parseRunId: input.parseRunId,
     lineNo: input.lineNo,
-    productMaker: input.productMaker,
     productNameRaw: input.productNameRaw,
     specRaw: input.specRaw,
     productKeyCandidate: input.productKeyCandidate,
@@ -140,30 +145,6 @@ function buildVendorPriceRow(input: {
     sourceType: "PDF",
     sourceId: input.sourceId,
     updatedAt: new Date(),
-  };
-}
-
-function buildProductRow(input: {
-  productId: string;
-  productKey: string;
-  productMaker: string | null;
-  productName: string;
-  spec: string | null;
-  defaultUnitPrice: string | null;
-  qualityFlag: string;
-  sourceId: string;
-}): ProductInsert {
-  return {
-    productId: input.productId,
-    productKey: input.productKey,
-    productMaker: input.productMaker,
-    productName: input.productName,
-    spec: input.spec,
-    defaultUnitPrice: input.defaultUnitPrice,
-    qualityFlag: input.qualityFlag,
-    lastUpdatedAt: new Date(),
-    lastSourceType: "PDF",
-    lastSourceId: input.sourceId,
   };
 }
 
@@ -256,6 +237,31 @@ async function getDocumentRow(documentId: string): Promise<DocumentRow | null> {
   return row ?? null;
 }
 
+async function failParseRun(input: {
+  documentId: string;
+  parseRunId: string;
+  errorDetail: string;
+  summary: string;
+  stats: Record<string, unknown>;
+}) {
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(documentParseRuns)
+      .set({
+        status: "FAILED",
+        finishedAt: new Date(),
+        errorDetail: input.errorDetail,
+        stats: input.stats,
+      })
+      .where(eq(documentParseRuns.parseRunId, input.parseRunId));
+    await tx
+      .update(documents)
+      .set({ status: "FAILED", parseErrorSummary: input.summary })
+      .where(eq(documents.documentId, input.documentId));
+  });
+}
+
 export async function parseDocument(documentId: string): Promise<ParseDocumentResult> {
   const documentRow = await getDocumentRow(documentId);
   if (!documentRow || documentRow.isDeleted) {
@@ -317,17 +323,44 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       detail === "PARSE_ERROR"
         ? "解析に失敗しました。"
         : "1ページPDFのみ解析可能です。アップロードをやり直してください。";
-    await db.transaction(async (tx) => {
-      await tx
-        .update(documentParseRuns)
-        .set({ status: "FAILED", finishedAt: new Date(), errorDetail: detail })
-        .where(eq(documentParseRuns.parseRunId, parseRunId));
-      await tx
-        .update(documents)
-        .set({ status: "FAILED", parseErrorSummary: summary })
-        .where(eq(documents.documentId, documentId));
+    await failParseRun({
+      documentId,
+      parseRunId,
+      errorDetail: detail,
+      summary,
+      stats: {
+        pageCount,
+        processedPages: 0,
+      },
     });
     throw error;
+  }
+
+  const rawLineItemCount = invoiceData.lineItems.length;
+  console.info("document_parse_result", {
+    documentId,
+    parseRunId,
+    vendorName: invoiceData.vendorName ?? null,
+    invoiceDate: invoiceData.invoiceDate ?? null,
+    lineItemCount: rawLineItemCount,
+  });
+
+  if (rawLineItemCount === 0) {
+    await failParseRun({
+      documentId,
+      parseRunId,
+      errorDetail: noLineItemsErrorCode,
+      summary: noLineItemsSummary,
+      stats: {
+        rawLineItemCount: 0,
+        lineItemCount: 0,
+        diffCount: 0,
+        pageCount,
+        processedPages: 1,
+      },
+    });
+
+    throw new Error(noLineItemsErrorCode);
   }
 
   const vendorName = invoiceData.vendorName ? normalizeText(invoiceData.vendorName) : null;
@@ -361,6 +394,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
             productMaker: productMaster.productMaker,
             productName: productMaster.productName,
             spec: productMaster.spec,
+            category: productMaster.category,
             defaultUnitPrice: productMaster.defaultUnitPrice,
             qualityFlag: productMaster.qualityFlag,
           })
@@ -377,6 +411,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         productMaker: string | null;
         productName: string;
         spec: string | null;
+        category: string | null;
         defaultUnitPrice: string | null;
         qualityFlag: string;
       }
@@ -389,6 +424,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         productMaker: row.productMaker ?? null,
         productName: row.productName,
         spec: row.spec ?? null,
+        category: row.category ?? null,
         defaultUnitPrice: row.defaultUnitPrice ?? null,
         qualityFlag: row.qualityFlag,
       });
@@ -439,124 +475,39 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         systemConfidenceNum,
         matchedProductId: matched?.productId ?? null,
         matchedProductSpec: matched?.spec ?? null,
+        matchedProductCategory: matched?.category ?? null,
       });
     });
 
-    for (const context of lineContexts) {
-      if (context.matchedProductId) continue;
-      const confidence = context.systemConfidenceNum;
-      if (confidence === null || confidence < 0.9) continue;
-      if (!context.productNameRaw) continue;
-      const productId = crypto.randomUUID();
-      const qualityFlag = context.specRaw ? "OK" : "WARN_KEY_WEAK";
-      const productRow = buildProductRow({
-        productId,
-        productKey: context.productKeyCandidate,
-        productMaker: context.productMaker,
-        productName: context.productNameRaw,
-        spec: context.specRaw,
-        defaultUnitPrice: context.unitPrice,
-        qualityFlag,
-        sourceId: parseRunId,
-      });
+    console.info("document_parse_normalized", {
+      documentId,
+      parseRunId,
+      rawLineItemCount,
+      lineItemCount: lineContexts.length,
+    });
 
-      const [matchedExisting] = await tx
-        .select({
-          productId: productMaster.productId,
-          productMaker: productMaster.productMaker,
-          spec: productMaster.spec,
-          productName: productMaster.productName,
-          productKey: productMaster.productKey,
-          defaultUnitPrice: productMaster.defaultUnitPrice,
-          qualityFlag: productMaster.qualityFlag,
+    if (lineContexts.length === 0) {
+      await tx
+        .update(documentParseRuns)
+        .set({
+          status: "FAILED",
+          finishedAt: new Date(),
+          errorDetail: noUsableLineItemsErrorCode,
+          stats: {
+            rawLineItemCount,
+            lineItemCount: 0,
+            diffCount: 0,
+            pageCount,
+            processedPages: 1,
+          },
         })
-        .from(productMaster)
-        .where(eq(productMaster.productKey, context.productKeyCandidate))
-        .orderBy(desc(productMaster.lastUpdatedAt), asc(productMaster.productId))
-        .limit(1);
-
-      const [savedProduct] = matchedExisting
-        ? await tx
-            .update(productMaster)
-            .set({
-              productMaker: sql`
-                CASE
-                  WHEN NULLIF(BTRIM(${productMaster.productMaker}), '') IS NULL
-                    AND NULLIF(BTRIM(${context.productMaker}), '') IS NOT NULL
-                  THEN ${context.productMaker}
-                  ELSE ${productMaster.productMaker}
-                END
-              `,
-              lastUpdatedAt: new Date(),
-              lastSourceType: "PDF",
-              lastSourceId: parseRunId,
-            })
-            .where(eq(productMaster.productId, matchedExisting.productId))
-            .returning({
-              productId: productMaster.productId,
-              productMaker: productMaster.productMaker,
-              spec: productMaster.spec,
-              productName: productMaster.productName,
-              productKey: productMaster.productKey,
-              defaultUnitPrice: productMaster.defaultUnitPrice,
-              qualityFlag: productMaster.qualityFlag,
-            })
-        : await tx.insert(productMaster).values(productRow).returning({
-            productId: productMaster.productId,
-            productMaker: productMaster.productMaker,
-            spec: productMaster.spec,
-            productName: productMaster.productName,
-            productKey: productMaster.productKey,
-            defaultUnitPrice: productMaster.defaultUnitPrice,
-            qualityFlag: productMaster.qualityFlag,
-          });
-
-      if (savedProduct) {
-        productMap.set(context.productKeyCandidate, {
-          productId: savedProduct.productId,
-          productKey: savedProduct.productKey,
-          productMaker: savedProduct.productMaker ?? null,
-          productName: savedProduct.productName,
-          spec: savedProduct.spec ?? null,
-          defaultUnitPrice: savedProduct.defaultUnitPrice ?? null,
-          qualityFlag: savedProduct.qualityFlag,
-        });
-      } else {
-        productMap.set(context.productKeyCandidate, {
-          productId,
-          productKey: context.productKeyCandidate,
-          productMaker: context.productMaker,
-          productName: context.productNameRaw,
-          spec: context.specRaw,
-          defaultUnitPrice: context.unitPrice,
-          qualityFlag,
-        });
-      }
-
-      const historyProductId = savedProduct?.productId ?? productId;
-      const historyRow = buildUpdateHistoryRow({
-        updateKey: `${parseRunId}:${historyProductId}:product_create`,
-        productId: historyProductId,
-        fieldName: "product_create",
-        vendorName,
-        beforeValue: null,
-        afterValue: context.productKeyCandidate,
-        sourceId: parseRunId,
-      });
-      await tx.insert(updateHistory).values(historyRow);
+        .where(eq(documentParseRuns.parseRunId, parseRunId));
+      await tx
+        .update(documents)
+        .set({ status: "FAILED", parseErrorSummary: noUsableLineItemsSummary })
+        .where(eq(documents.documentId, documentId));
+      return;
     }
-
-    lineContexts.forEach((context) => {
-      if (!context.matchedProductId) {
-        const match =
-          productMap.get(context.productKeyCandidate) ??
-          productMap.get(context.legacyProductKeyCandidate);
-        if (match) {
-          context.matchedProductId = match.productId;
-          context.matchedProductSpec = match.spec ?? null;
-        }
-      }
-    });
 
     const lineItemRows = lineContexts.map((context) =>
       buildLineItemRow({ ...context, parseRunId }),
@@ -564,6 +515,11 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
     if (lineItemRows.length) {
       await tx.insert(documentLineItems).values(lineItemRows);
     }
+    console.info("document_parse_line_items_inserted", {
+      documentId,
+      parseRunId,
+      count: lineItemRows.length,
+    });
 
     const matchedProductIds = lineContexts
       .map((context) => context.matchedProductId)
@@ -595,21 +551,25 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       const before: Record<string, unknown> = {};
       const after: Record<string, unknown> = {
         productName: context.productNameRaw,
+        productMaker: context.productMaker,
         spec: context.specRaw,
+        productKeyCandidate: context.productKeyCandidate,
         unitPrice: context.unitPrice,
         amount: context.amount,
       };
 
       if (!context.matchedProductId) {
         const confidence = context.systemConfidenceNum;
-        const canCreate = confidence !== null && confidence >= 0.9;
+        const canCreateCandidate = confidence !== null && confidence >= 0.9;
         diffRows.push(
           buildDiffItemRow({
             diffItemId: crypto.randomUUID(),
             parseRunId,
             lineItemId: context.lineItemId,
-            classification: canCreate ? "NEW_CANDIDATE" : "UNMATCHED",
-            reason: canCreate ? null : "NO_PRODUCT_MATCH",
+            classification: canCreateCandidate ? "NEW_CANDIDATE" : "UNMATCHED",
+            reason: canCreateCandidate
+              ? "REVIEW_REQUIRED_BEFORE_PRODUCT_CREATE"
+              : "NO_PRODUCT_MATCH",
             vendorName,
             invoiceDate,
             before,
@@ -660,6 +620,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       }
       before.productId = context.matchedProductId;
       before.spec = context.matchedProductSpec;
+      before.category = context.matchedProductCategory;
 
       let classification = "NO_CHANGE";
       if (requiresUpdate) {
@@ -757,6 +718,11 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
     if (diffRows.length) {
       await tx.insert(documentDiffItems).values(diffRows);
     }
+    console.info("document_parse_diff_items_inserted", {
+      documentId,
+      parseRunId,
+      count: diffRows.length,
+    });
 
     await tx
       .update(documents)
@@ -774,13 +740,24 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         status: "SUCCEEDED",
         finishedAt: new Date(),
         stats: {
+          rawLineItemCount,
           lineItemCount: lineContexts.length,
           diffCount: diffRows.length,
           pageCount,
           processedPages: 1,
+          newCandidateCount: diffRows.filter((row) => row.classification === "NEW_CANDIDATE").length,
+          unmatchedCount: diffRows.filter((row) => row.classification === "UNMATCHED").length,
         },
       })
       .where(eq(documentParseRuns.parseRunId, parseRunId));
+
+    console.info("document_parse_completed", {
+      documentId,
+      parseRunId,
+      status: "SUCCEEDED",
+      lineItemCount: lineContexts.length,
+      diffCount: diffRows.length,
+    });
   });
 
   return { parseRunId, status: "SUCCEEDED" };

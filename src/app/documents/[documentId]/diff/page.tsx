@@ -1,25 +1,52 @@
-import { headers } from "next/headers";
 import type { CSSProperties, ReactNode } from "react";
-import type { DocumentDiffItem, DocumentLineItem } from "@/services/documents/types";
+import {
+  getDocumentDetail,
+  listDocumentDiffItems,
+  listDocumentLineItems,
+} from "@/services/documents/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type DiffResponse = { items: DocumentDiffItem[] };
-type LineItemResponse = { items: DocumentLineItem[] };
-
-async function getBaseUrl() {
-  const headerList = await headers();
-  const host = headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") ?? "http";
-  return host ? `${proto}://${host}` : "";
-}
 
 function formatDate(iso: string | null) {
   if (!iso) return "-";
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
   return date.toISOString().slice(0, 10);
+}
+
+function getClassificationLabel(classification: string) {
+  switch (classification) {
+    case "UPDATE":
+      return "更新候補";
+    case "BLOCKED":
+      return "自動停止";
+    case "UNMATCHED":
+      return "未突合";
+    case "NO_CHANGE":
+      return "変更なし";
+    case "NEW_CANDIDATE":
+      return "新規候補（確認待ち）";
+    default:
+      return classification;
+  }
+}
+
+function getReasonLabel(reason: string | null) {
+  switch (reason) {
+    case "REVIEW_REQUIRED_BEFORE_PRODUCT_CREATE":
+      return "既存商品への紐づけ、またはカテゴリ選択付き新規登録が必要です。";
+    case "NO_PRODUCT_MATCH":
+      return "既存商品に一致しませんでした。";
+    case "LINKED_TO_EXISTING_PRODUCT":
+      return "既存商品に紐づけ済みです。";
+    default:
+      return reason ?? "-";
+  }
+}
+
+function canLinkProduct(classification: string) {
+  return classification === "NEW_CANDIDATE" || classification === "UNMATCHED";
 }
 
 type SearchParams = { classification?: string };
@@ -34,15 +61,13 @@ export default async function DocumentDiffPage({
   const { documentId } = await params;
   const resolvedSearchParams = await (searchParams ?? Promise.resolve({} as SearchParams));
   const classificationFilter = resolvedSearchParams.classification ?? "ALL";
-  const baseUrl = await getBaseUrl();
 
-  const [lineRes, diffRes] = await Promise.all([
-    fetch(`${baseUrl}/api/documents/${documentId}/line-items`, { cache: "no-store" }),
-    fetch(`${baseUrl}/api/documents/${documentId}/diff`, { cache: "no-store" }),
+  const doc = await getDocumentDetail(documentId);
+  const parseRunId = doc?.latestParseRun?.parseRunId ?? null;
+  const [lineItems, diffItems] = await Promise.all([
+    listDocumentLineItems(documentId, parseRunId),
+    listDocumentDiffItems(documentId, { parseRunId }),
   ]);
-
-  const lineItems = lineRes.ok ? ((await lineRes.json()) as LineItemResponse).items : [];
-  const diffItems = diffRes.ok ? ((await diffRes.json()) as DiffResponse).items : [];
 
   const summary = diffItems.reduce<Record<string, number>>((acc, item) => {
     acc[item.classification] = (acc[item.classification] ?? 0) + 1;
@@ -63,7 +88,20 @@ export default async function DocumentDiffPage({
         </a>
         <h1 style={{ margin: 0 }}>差分結果</h1>
         <p style={{ margin: 0, color: "var(--muted)" }}>PDF解析の差分と自動更新の判定結果です。</p>
+        {parseRunId && (
+          <p style={{ margin: 0, color: "var(--muted)", fontSize: 12 }}>
+            parseRunId: {parseRunId}
+          </p>
+        )}
       </header>
+
+      <section style={noticeStyle}>
+        <strong>新規候補は自動登録されません。</strong>
+        <span>
+          PDF由来の商品が既存マスタに一致しない場合は、商品マスタへ即時作成せず確認待ちとして表示します。
+          既存商品へ紐づける場合は、その既存商品のカテゴリを引き継ぐ前提で確認してください。
+        </span>
+      </section>
 
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>更新サマリー</h2>
@@ -92,7 +130,7 @@ export default async function DocumentDiffPage({
         <ul style={{ display: "grid", gap: 4, margin: 0, paddingLeft: 16 }}>
           {Object.entries(summary).map(([key, count]) => (
             <li key={key}>
-              {key}: {count} 件
+              {getClassificationLabel(key)}: {count} 件
             </li>
           ))}
           {Object.keys(summary).length === 0 && (
@@ -155,13 +193,14 @@ export default async function DocumentDiffPage({
                 <Th>請求日</Th>
                 <Th>Before</Th>
                 <Th>After</Th>
+                <Th>操作</Th>
               </tr>
             </thead>
             <tbody>
               {filteredDiffItems.map((item) => (
                 <tr key={item.diffItemId}>
-                  <Td>{item.classification}</Td>
-                  <Td muted>{item.reason ?? "-"}</Td>
+                  <Td>{getClassificationLabel(item.classification)}</Td>
+                  <Td muted>{getReasonLabel(item.reason)}</Td>
                   <Td>{item.vendorName ?? "-"}</Td>
                   <Td muted>{formatDate(item.invoiceDate)}</Td>
                   <Td muted>
@@ -170,12 +209,24 @@ export default async function DocumentDiffPage({
                   <Td muted>
                     <pre style={preStyle}>{JSON.stringify(item.after, null, 2)}</pre>
                   </Td>
+                  <Td>
+                    {canLinkProduct(item.classification) ? (
+                      <a
+                        href={`/documents/${documentId}/diff/${item.diffItemId}/link`}
+                        style={linkButtonStyle}
+                      >
+                        既存商品に紐づける
+                      </a>
+                    ) : (
+                      <span style={{ color: "var(--muted)" }}>-</span>
+                    )}
+                  </Td>
                 </tr>
               ))}
               {filteredDiffItems.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
                   >
                     差分はまだありません。
@@ -196,6 +247,13 @@ const cardStyle: CSSProperties = {
   borderRadius: "var(--radius-lg)",
   boxShadow: "var(--shadow-soft)",
   padding: "var(--space-4)",
+};
+
+const noticeStyle: CSSProperties = {
+  ...cardStyle,
+  display: "grid",
+  gap: 4,
+  borderColor: "var(--color-accent1)",
 };
 
 const tableStyle: CSSProperties = {
@@ -225,6 +283,18 @@ const backLinkStyle: CSSProperties = {
   borderRadius: "var(--radius-md)",
   padding: "6px 10px",
   fontSize: 13,
+};
+
+const linkButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "8px 10px",
+  borderRadius: "var(--radius-md)",
+  border: "1px solid var(--border)",
+  color: "var(--text)",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
 };
 
 function Th({ children }: { children: ReactNode }) {
