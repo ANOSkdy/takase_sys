@@ -1,19 +1,12 @@
-import { headers } from "next/headers";
 import type { CSSProperties, ReactNode } from "react";
-import type { DocumentDiffItem, DocumentLineItem } from "@/services/documents/types";
+import {
+  getDocumentDetail,
+  listDocumentDiffItems,
+  listDocumentLineItems,
+} from "@/services/documents/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type DiffResponse = { items: DocumentDiffItem[] };
-type LineItemResponse = { items: DocumentLineItem[] };
-
-async function getBaseUrl() {
-  const headerList = await headers();
-  const host = headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") ?? "http";
-  return host ? `${proto}://${host}` : "";
-}
 
 function formatDate(iso: string | null) {
   if (!iso) return "-";
@@ -62,15 +55,13 @@ export default async function DocumentDiffPage({
   const { documentId } = await params;
   const resolvedSearchParams = await (searchParams ?? Promise.resolve({} as SearchParams));
   const classificationFilter = resolvedSearchParams.classification ?? "ALL";
-  const baseUrl = await getBaseUrl();
 
-  const [lineRes, diffRes] = await Promise.all([
-    fetch(`${baseUrl}/api/documents/${documentId}/line-items`, { cache: "no-store" }),
-    fetch(`${baseUrl}/api/documents/${documentId}/diff`, { cache: "no-store" }),
+  const doc = await getDocumentDetail(documentId);
+  const parseRunId = doc?.latestParseRun?.parseRunId ?? null;
+  const [lineItems, diffItems] = await Promise.all([
+    listDocumentLineItems(documentId, parseRunId),
+    listDocumentDiffItems(documentId, { parseRunId }),
   ]);
-
-  const lineItems = lineRes.ok ? ((await lineRes.json()) as LineItemResponse).items : [];
-  const diffItems = diffRes.ok ? ((await diffRes.json()) as DiffResponse).items : [];
 
   const summary = diffItems.reduce<Record<string, number>>((acc, item) => {
     acc[item.classification] = (acc[item.classification] ?? 0) + 1;
@@ -91,6 +82,11 @@ export default async function DocumentDiffPage({
         </a>
         <h1 style={{ margin: 0 }}>差分結果</h1>
         <p style={{ margin: 0, color: "var(--muted)" }}>PDF解析の差分と自動更新の判定結果です。</p>
+        {parseRunId && (
+          <p style={{ margin: 0, color: "var(--muted)", fontSize: 12 }}>
+            parseRunId: {parseRunId}
+          </p>
+        )}
       </header>
 
       <section style={noticeStyle}>
