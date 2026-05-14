@@ -19,6 +19,10 @@ function asText(value: unknown): string {
   return typeof value === "string" && value.trim() ? value.trim() : "-";
 }
 
+function searchText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export default async function LinkPage({
   params,
   searchParams,
@@ -44,10 +48,8 @@ export default async function LinkPage({
   if (!row) notFound();
 
   const after = asObject(row.after);
-  const defaultKeyword = [asText(after.productName), asText(after.spec)]
-    .filter((v) => v !== "-")
-    .join(" ");
-  const keyword = sp.keyword ?? defaultKeyword;
+  const productNameKeyword = searchText(after.productName);
+  const keyword = sp.keyword ?? productNameKeyword;
   const products = await listProducts({ keyword: keyword || null, limit: 50 });
 
   return (
@@ -65,6 +67,9 @@ export default async function LinkPage({
       </section>
 
       <section style={cardStyle}>
+        <p style={{ marginTop: 0, color: "var(--muted)" }}>
+          初期候補はPDF明細の商品名だけで検索しています。規格やメーカーで絞り込みたい場合は検索語を編集してください。
+        </p>
         <form method="get" style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           <input name="keyword" defaultValue={keyword} style={inputStyle} />
           <button type="submit">検索</button>
@@ -97,7 +102,7 @@ export default async function LinkPage({
             ))}
             {products.length === 0 && (
               <tr>
-                <td colSpan={5} style={tdStyle}>候補商品がありません。</td>
+                <td colSpan={5} style={tdStyle}>候補商品がありません。検索語を短くするか、別の商品名で検索してください。</td>
               </tr>
             )}
           </tbody>
