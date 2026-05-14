@@ -26,6 +26,9 @@ type VendorPriceInsert = typeof vendorPrices.$inferInsert;
 type UpdateHistoryInsert = typeof updateHistory.$inferInsert;
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const noLineItemsErrorCode = "NO_LINE_ITEMS_EXTRACTED";
+const noLineItemsSummary =
+  "PDFから明細を抽出できませんでした。明細表が写っているか、スキャン品質やPDF内容を確認してください。";
 
 type LineItemContext = {
   lineItemId: string;
@@ -304,6 +307,40 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         .where(eq(documents.documentId, documentId));
     });
     throw error;
+  }
+
+  const rawLineItemCount = invoiceData.lineItems.length;
+  console.info("document_parse_result", {
+    documentId,
+    parseRunId,
+    vendorName: invoiceData.vendorName ?? null,
+    invoiceDate: invoiceData.invoiceDate ?? null,
+    lineItemCount: rawLineItemCount,
+  });
+
+  if (rawLineItemCount === 0) {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(documentParseRuns)
+        .set({
+          status: "FAILED",
+          finishedAt: new Date(),
+          errorDetail: noLineItemsErrorCode,
+          stats: {
+            lineItemCount: 0,
+            diffCount: 0,
+            pageCount,
+            processedPages: 1,
+          },
+        })
+        .where(eq(documentParseRuns.parseRunId, parseRunId));
+      await tx
+        .update(documents)
+        .set({ status: "FAILED", parseErrorSummary: noLineItemsSummary })
+        .where(eq(documents.documentId, documentId));
+    });
+
+    throw new Error(noLineItemsErrorCode);
   }
 
   const vendorName = invoiceData.vendorName ? normalizeText(invoiceData.vendorName) : null;
