@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   documentDiffItems,
@@ -23,7 +23,6 @@ type ParseRunInsert = typeof documentParseRuns.$inferInsert;
 type LineItemInsert = typeof documentLineItems.$inferInsert;
 type DiffItemInsert = typeof documentDiffItems.$inferInsert;
 type VendorPriceInsert = typeof vendorPrices.$inferInsert;
-type ProductInsert = typeof productMaster.$inferInsert;
 type UpdateHistoryInsert = typeof updateHistory.$inferInsert;
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -44,6 +43,7 @@ type LineItemContext = {
   systemConfidenceNum: number | null;
   matchedProductId: string | null;
   matchedProductSpec: string | null;
+  matchedProductCategory: string | null;
 };
 
 type VendorPriceRow = {
@@ -140,30 +140,6 @@ function buildVendorPriceRow(input: {
     sourceType: "PDF",
     sourceId: input.sourceId,
     updatedAt: new Date(),
-  };
-}
-
-function buildProductRow(input: {
-  productId: string;
-  productKey: string;
-  productMaker: string | null;
-  productName: string;
-  spec: string | null;
-  defaultUnitPrice: string | null;
-  qualityFlag: string;
-  sourceId: string;
-}): ProductInsert {
-  return {
-    productId: input.productId,
-    productKey: input.productKey,
-    productMaker: input.productMaker,
-    productName: input.productName,
-    spec: input.spec,
-    defaultUnitPrice: input.defaultUnitPrice,
-    qualityFlag: input.qualityFlag,
-    lastUpdatedAt: new Date(),
-    lastSourceType: "PDF",
-    lastSourceId: input.sourceId,
   };
 }
 
@@ -361,6 +337,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
             productMaker: productMaster.productMaker,
             productName: productMaster.productName,
             spec: productMaster.spec,
+            category: productMaster.category,
             defaultUnitPrice: productMaster.defaultUnitPrice,
             qualityFlag: productMaster.qualityFlag,
           })
@@ -377,6 +354,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         productMaker: string | null;
         productName: string;
         spec: string | null;
+        category: string | null;
         defaultUnitPrice: string | null;
         qualityFlag: string;
       }
@@ -389,6 +367,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         productMaker: row.productMaker ?? null,
         productName: row.productName,
         spec: row.spec ?? null,
+        category: row.category ?? null,
         defaultUnitPrice: row.defaultUnitPrice ?? null,
         qualityFlag: row.qualityFlag,
       });
@@ -439,123 +418,8 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         systemConfidenceNum,
         matchedProductId: matched?.productId ?? null,
         matchedProductSpec: matched?.spec ?? null,
+        matchedProductCategory: matched?.category ?? null,
       });
-    });
-
-    for (const context of lineContexts) {
-      if (context.matchedProductId) continue;
-      const confidence = context.systemConfidenceNum;
-      if (confidence === null || confidence < 0.9) continue;
-      if (!context.productNameRaw) continue;
-      const productId = crypto.randomUUID();
-      const qualityFlag = context.specRaw ? "OK" : "WARN_KEY_WEAK";
-      const productRow = buildProductRow({
-        productId,
-        productKey: context.productKeyCandidate,
-        productMaker: context.productMaker,
-        productName: context.productNameRaw,
-        spec: context.specRaw,
-        defaultUnitPrice: context.unitPrice,
-        qualityFlag,
-        sourceId: parseRunId,
-      });
-
-      const [matchedExisting] = await tx
-        .select({
-          productId: productMaster.productId,
-          productMaker: productMaster.productMaker,
-          spec: productMaster.spec,
-          productName: productMaster.productName,
-          productKey: productMaster.productKey,
-          defaultUnitPrice: productMaster.defaultUnitPrice,
-          qualityFlag: productMaster.qualityFlag,
-        })
-        .from(productMaster)
-        .where(eq(productMaster.productKey, context.productKeyCandidate))
-        .orderBy(desc(productMaster.lastUpdatedAt), asc(productMaster.productId))
-        .limit(1);
-
-      const [savedProduct] = matchedExisting
-        ? await tx
-            .update(productMaster)
-            .set({
-              productMaker: sql`
-                CASE
-                  WHEN NULLIF(BTRIM(${productMaster.productMaker}), '') IS NULL
-                    AND NULLIF(BTRIM(${context.productMaker}), '') IS NOT NULL
-                  THEN ${context.productMaker}
-                  ELSE ${productMaster.productMaker}
-                END
-              `,
-              lastUpdatedAt: new Date(),
-              lastSourceType: "PDF",
-              lastSourceId: parseRunId,
-            })
-            .where(eq(productMaster.productId, matchedExisting.productId))
-            .returning({
-              productId: productMaster.productId,
-              productMaker: productMaster.productMaker,
-              spec: productMaster.spec,
-              productName: productMaster.productName,
-              productKey: productMaster.productKey,
-              defaultUnitPrice: productMaster.defaultUnitPrice,
-              qualityFlag: productMaster.qualityFlag,
-            })
-        : await tx.insert(productMaster).values(productRow).returning({
-            productId: productMaster.productId,
-            productMaker: productMaster.productMaker,
-            spec: productMaster.spec,
-            productName: productMaster.productName,
-            productKey: productMaster.productKey,
-            defaultUnitPrice: productMaster.defaultUnitPrice,
-            qualityFlag: productMaster.qualityFlag,
-          });
-
-      if (savedProduct) {
-        productMap.set(context.productKeyCandidate, {
-          productId: savedProduct.productId,
-          productKey: savedProduct.productKey,
-          productMaker: savedProduct.productMaker ?? null,
-          productName: savedProduct.productName,
-          spec: savedProduct.spec ?? null,
-          defaultUnitPrice: savedProduct.defaultUnitPrice ?? null,
-          qualityFlag: savedProduct.qualityFlag,
-        });
-      } else {
-        productMap.set(context.productKeyCandidate, {
-          productId,
-          productKey: context.productKeyCandidate,
-          productMaker: context.productMaker,
-          productName: context.productNameRaw,
-          spec: context.specRaw,
-          defaultUnitPrice: context.unitPrice,
-          qualityFlag,
-        });
-      }
-
-      const historyProductId = savedProduct?.productId ?? productId;
-      const historyRow = buildUpdateHistoryRow({
-        updateKey: `${parseRunId}:${historyProductId}:product_create`,
-        productId: historyProductId,
-        fieldName: "product_create",
-        vendorName,
-        beforeValue: null,
-        afterValue: context.productKeyCandidate,
-        sourceId: parseRunId,
-      });
-      await tx.insert(updateHistory).values(historyRow);
-    }
-
-    lineContexts.forEach((context) => {
-      if (!context.matchedProductId) {
-        const match =
-          productMap.get(context.productKeyCandidate) ??
-          productMap.get(context.legacyProductKeyCandidate);
-        if (match) {
-          context.matchedProductId = match.productId;
-          context.matchedProductSpec = match.spec ?? null;
-        }
-      }
     });
 
     const lineItemRows = lineContexts.map((context) =>
@@ -595,21 +459,25 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       const before: Record<string, unknown> = {};
       const after: Record<string, unknown> = {
         productName: context.productNameRaw,
+        productMaker: context.productMaker,
         spec: context.specRaw,
+        productKeyCandidate: context.productKeyCandidate,
         unitPrice: context.unitPrice,
         amount: context.amount,
       };
 
       if (!context.matchedProductId) {
         const confidence = context.systemConfidenceNum;
-        const canCreate = confidence !== null && confidence >= 0.9;
+        const canCreateCandidate = confidence !== null && confidence >= 0.9;
         diffRows.push(
           buildDiffItemRow({
             diffItemId: crypto.randomUUID(),
             parseRunId,
             lineItemId: context.lineItemId,
-            classification: canCreate ? "NEW_CANDIDATE" : "UNMATCHED",
-            reason: canCreate ? null : "NO_PRODUCT_MATCH",
+            classification: canCreateCandidate ? "NEW_CANDIDATE" : "UNMATCHED",
+            reason: canCreateCandidate
+              ? "REVIEW_REQUIRED_BEFORE_PRODUCT_CREATE"
+              : "NO_PRODUCT_MATCH",
             vendorName,
             invoiceDate,
             before,
@@ -660,6 +528,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       }
       before.productId = context.matchedProductId;
       before.spec = context.matchedProductSpec;
+      before.category = context.matchedProductCategory;
 
       let classification = "NO_CHANGE";
       if (requiresUpdate) {
@@ -778,6 +647,8 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           diffCount: diffRows.length,
           pageCount,
           processedPages: 1,
+          newCandidateCount: diffRows.filter((row) => row.classification === "NEW_CANDIDATE").length,
+          unmatchedCount: diffRows.filter((row) => row.classification === "UNMATCHED").length,
         },
       })
       .where(eq(documentParseRuns.parseRunId, parseRunId));
