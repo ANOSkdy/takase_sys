@@ -238,7 +238,7 @@ const noticeStyle: CSSProperties = {
   ...cardStyle,
   display: "grid",
   gap: 4,
-  borderColor: "var(--accent-1)",
+  borderColor: "var(--color-accent1)",
 };
 
 const tableStyle: CSSProperties = {
