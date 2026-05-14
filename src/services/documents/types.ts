@@ -90,3 +90,28 @@ export type DocumentDiffItem = {
   before: Record<string, unknown>;
   after: Record<string, unknown>;
 };
+
+export type PendingDiffReviewItem = {
+  documentId: string;
+  fileName: string;
+  uploadedAt: string;
+  parseRunId: string;
+  diffItemId: string;
+  classification: "NEW_CANDIDATE" | "UNMATCHED";
+  reason: string | null;
+  vendorName: string | null;
+  invoiceDate: string | null;
+  after: Record<string, unknown>;
+};
+
+export type PendingDiffReviewSummary = {
+  total: number;
+  newCandidate: number;
+  unmatched: number;
+};
+
+export type DocumentDashboardStats = {
+  uploadedDocuments: number;
+  failedParses: number;
+  pendingReview: PendingDiffReviewSummary;
+};

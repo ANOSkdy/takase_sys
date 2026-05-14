@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { documentDiffItems, documentLineItems, documentParseRuns, documents } from "@/db/schema";
 import type {
@@ -6,8 +6,11 @@ import type {
   DocumentDiffItem,
   DocumentLineItem,
   DocumentListItem,
+  DocumentDashboardStats,
   RegisterDocumentInput,
   RegisterDocumentBulkInput,
+  PendingDiffReviewItem,
+  PendingDiffReviewSummary,
   RegisterDocumentBulkResult,
   RegisterDocumentResult,
   SoftDeleteResult,
@@ -353,4 +356,115 @@ export async function listDocumentDiffItems(
     before: row.before ?? {},
     after: row.after ?? {},
   }));
+}
+
+const pendingReviewClassifications = ["NEW_CANDIDATE", "UNMATCHED"] as const;
+
+function toPendingReviewClassification(
+  value: string,
+): PendingDiffReviewItem["classification"] | null {
+  if (value === "NEW_CANDIDATE" || value === "UNMATCHED") return value;
+  return null;
+}
+
+export async function listPendingDiffReviewItems(limit = 10): Promise<PendingDiffReviewItem[]> {
+  const db = getDb();
+  const safeLimit = Math.max(1, Math.min(limit, 50));
+  const rows = await db
+    .select({
+      documentId: documents.documentId,
+      fileName: documents.fileName,
+      uploadedAt: documents.uploadedAt,
+      parseRunId: documentParseRuns.parseRunId,
+      diffItemId: documentDiffItems.diffItemId,
+      classification: documentDiffItems.classification,
+      reason: documentDiffItems.reason,
+      vendorName: documentDiffItems.vendorName,
+      invoiceDate: documentDiffItems.invoiceDate,
+      after: documentDiffItems.after,
+    })
+    .from(documentDiffItems)
+    .innerJoin(documentParseRuns, eq(documentDiffItems.parseRunId, documentParseRuns.parseRunId))
+    .innerJoin(documents, eq(documentParseRuns.documentId, documents.documentId))
+    .where(
+      and(
+        inArray(documentDiffItems.classification, pendingReviewClassifications),
+        eq(documents.isDeleted, false),
+      ),
+    )
+    .orderBy(
+      desc(documents.uploadedAt),
+      desc(documentParseRuns.startedAt),
+      documentDiffItems.diffItemId,
+    )
+    .limit(safeLimit);
+
+  return rows.flatMap((row) => {
+    const classification = toPendingReviewClassification(row.classification);
+    if (!classification) return [];
+    return [
+      {
+        documentId: row.documentId,
+        fileName: row.fileName,
+        uploadedAt: toIsoString(row.uploadedAt) ?? "",
+        parseRunId: row.parseRunId,
+        diffItemId: row.diffItemId,
+        classification,
+        reason: row.reason ?? null,
+        vendorName: row.vendorName ?? null,
+        invoiceDate: toDateString(row.invoiceDate),
+        after: row.after ?? {},
+      },
+    ];
+  });
+}
+
+export async function getPendingDiffReviewSummary(): Promise<PendingDiffReviewSummary> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      classification: documentDiffItems.classification,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(documentDiffItems)
+    .innerJoin(documentParseRuns, eq(documentDiffItems.parseRunId, documentParseRuns.parseRunId))
+    .innerJoin(documents, eq(documentParseRuns.documentId, documents.documentId))
+    .where(
+      and(
+        inArray(documentDiffItems.classification, pendingReviewClassifications),
+        eq(documents.isDeleted, false),
+      ),
+    )
+    .groupBy(documentDiffItems.classification);
+
+  const summary: PendingDiffReviewSummary = { total: 0, newCandidate: 0, unmatched: 0 };
+  for (const row of rows) {
+    const count = Number(row.count);
+    summary.total += count;
+    if (row.classification === "NEW_CANDIDATE") summary.newCandidate = count;
+    if (row.classification === "UNMATCHED") summary.unmatched = count;
+  }
+  return summary;
+}
+
+export async function getDocumentDashboardStats(): Promise<DocumentDashboardStats> {
+  const db = getDb();
+  const [documentRows, parseRows, pendingReview] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(documents)
+      .where(eq(documents.isDeleted, false)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(documentParseRuns)
+      .innerJoin(documents, eq(documentParseRuns.documentId, documents.documentId))
+      .where(and(eq(documentParseRuns.status, "FAILED"), eq(documents.isDeleted, false))),
+    getPendingDiffReviewSummary(),
+  ]);
+
+  return {
+    uploadedDocuments: Number(documentRows[0]?.count ?? 0),
+    failedParses: Number(parseRows[0]?.count ?? 0),
+    pendingReview,
+  };
 }
