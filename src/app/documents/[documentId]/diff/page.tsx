@@ -22,6 +22,34 @@ function formatDate(iso: string | null) {
   return date.toISOString().slice(0, 10);
 }
 
+function getClassificationLabel(classification: string) {
+  switch (classification) {
+    case "UPDATE":
+      return "更新候補";
+    case "BLOCKED":
+      return "自動停止";
+    case "UNMATCHED":
+      return "未突合";
+    case "NO_CHANGE":
+      return "変更なし";
+    case "NEW_CANDIDATE":
+      return "新規候補（確認待ち）";
+    default:
+      return classification;
+  }
+}
+
+function getReasonLabel(reason: string | null) {
+  switch (reason) {
+    case "REVIEW_REQUIRED_BEFORE_PRODUCT_CREATE":
+      return "既存商品への紐づけ、またはカテゴリ選択付き新規登録が必要です。";
+    case "NO_PRODUCT_MATCH":
+      return "既存商品に一致しませんでした。";
+    default:
+      return reason ?? "-";
+  }
+}
+
 type SearchParams = { classification?: string };
 
 export default async function DocumentDiffPage({
@@ -65,6 +93,14 @@ export default async function DocumentDiffPage({
         <p style={{ margin: 0, color: "var(--muted)" }}>PDF解析の差分と自動更新の判定結果です。</p>
       </header>
 
+      <section style={noticeStyle}>
+        <strong>新規候補は自動登録されません。</strong>
+        <span>
+          PDF由来の商品が既存マスタに一致しない場合は、商品マスタへ即時作成せず確認待ちとして表示します。
+          既存商品へ紐づける場合は、その既存商品のカテゴリを引き継ぐ前提で確認してください。
+        </span>
+      </section>
+
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>更新サマリー</h2>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
@@ -92,7 +128,7 @@ export default async function DocumentDiffPage({
         <ul style={{ display: "grid", gap: 4, margin: 0, paddingLeft: 16 }}>
           {Object.entries(summary).map(([key, count]) => (
             <li key={key}>
-              {key}: {count} 件
+              {getClassificationLabel(key)}: {count} 件
             </li>
           ))}
           {Object.keys(summary).length === 0 && (
@@ -160,8 +196,8 @@ export default async function DocumentDiffPage({
             <tbody>
               {filteredDiffItems.map((item) => (
                 <tr key={item.diffItemId}>
-                  <Td>{item.classification}</Td>
-                  <Td muted>{item.reason ?? "-"}</Td>
+                  <Td>{getClassificationLabel(item.classification)}</Td>
+                  <Td muted>{getReasonLabel(item.reason)}</Td>
                   <Td>{item.vendorName ?? "-"}</Td>
                   <Td muted>{formatDate(item.invoiceDate)}</Td>
                   <Td muted>
@@ -196,6 +232,13 @@ const cardStyle: CSSProperties = {
   borderRadius: "var(--radius-lg)",
   boxShadow: "var(--shadow-soft)",
   padding: "var(--space-4)",
+};
+
+const noticeStyle: CSSProperties = {
+  ...cardStyle,
+  display: "grid",
+  gap: 4,
+  borderColor: "var(--accent-1)",
 };
 
 const tableStyle: CSSProperties = {
