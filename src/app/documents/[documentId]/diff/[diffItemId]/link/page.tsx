@@ -41,8 +41,16 @@ export default async function LinkPage({
       after: documentDiffItems.after,
     })
     .from(documentDiffItems)
-    .innerJoin(documentParseRuns, eq(documentParseRuns.parseRunId, documentDiffItems.parseRunId))
-    .where(and(eq(documentDiffItems.diffItemId, diffItemId), eq(documentParseRuns.documentId, documentId)))
+    .innerJoin(
+      documentParseRuns,
+      eq(documentParseRuns.parseRunId, documentDiffItems.parseRunId),
+    )
+    .where(
+      and(
+        eq(documentDiffItems.diffItemId, diffItemId),
+        eq(documentParseRuns.documentId, documentId),
+      ),
+    )
     .limit(1);
 
   if (!row) notFound();
@@ -70,7 +78,10 @@ export default async function LinkPage({
         <p style={{ marginTop: 0, color: "var(--muted)" }}>
           初期候補はPDF明細の商品名だけで検索しています。規格やメーカーで絞り込みたい場合は検索語を編集してください。
         </p>
-        <form method="get" style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <form
+          method="get"
+          style={{ display: "flex", gap: 8, marginBottom: 16 }}
+        >
           <input name="keyword" defaultValue={keyword} style={inputStyle} />
           <button type="submit">検索</button>
         </form>
@@ -93,8 +104,15 @@ export default async function LinkPage({
                 <td style={tdStyle}>{product.category ?? "-"}</td>
                 <td style={tdStyle}>{product.productKey}</td>
                 <td style={tdStyle}>
-                  <form method="post" action={`/api/documents/${documentId}/diff/${diffItemId}/link-product`}>
-                    <input type="hidden" name="productId" value={product.productId} />
+                  <form
+                    method="post"
+                    action={`/api/documents/${documentId}/diff/${diffItemId}/link-product`}
+                  >
+                    <input
+                      type="hidden"
+                      name="productId"
+                      value={product.productId}
+                    />
                     <button type="submit">紐づける</button>
                   </form>
                 </td>
@@ -102,7 +120,9 @@ export default async function LinkPage({
             ))}
             {products.length === 0 && (
               <tr>
-                <td colSpan={5} style={tdStyle}>候補商品がありません。検索語を短くするか、別の商品名で検索してください。</td>
+                <td colSpan={5} style={tdStyle}>
+                  候補商品がありません。検索語を短くするか、別の商品名で検索してください。
+                </td>
               </tr>
             )}
           </tbody>
