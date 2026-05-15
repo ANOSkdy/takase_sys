@@ -1,141 +1,218 @@
 .page {
-  --background: #fafafa;
-  --foreground: #fff;
-
-  --text-primary: #000;
-  --text-secondary: #666;
-
-  --button-primary-hover: #383838;
-  --button-secondary-hover: #f2f2f2;
-  --button-secondary-border: #ebebeb;
-
-  display: flex;
-  min-height: 100vh;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-geist-sans);
-  background-color: var(--background);
+  display: grid;
+  gap: var(--space-6);
+  padding: calc(64px + var(--space-6)) var(--space-6) var(--space-6);
 }
 
-.main {
+.hero,
+.section,
+.reviewSection {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-6);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: var(--space-6);
+  align-items: end;
+}
+
+.heroText,
+.sectionHeader {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.heroText h1,
+.sectionHeader h2 {
+  margin: 0;
+}
+
+.heroText h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.1;
+}
+
+.heroText p,
+.sectionHeader p,
+.pendingItem p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.eyebrow {
+  color: var(--color-primary) !important;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.statusGrid,
+.reviewSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.reviewSummary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: var(--space-4);
+}
+
+.statusCard {
+  display: grid;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-base) 78%, var(--surface));
+  padding: var(--space-4);
+}
+
+.statusCard span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.statusCard strong {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.statusCard small {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.statusCardAccent {
+  border-color: color-mix(in srgb, var(--color-accent2) 42%, var(--border));
+  background: color-mix(in srgb, var(--color-accent2) 10%, var(--surface));
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.navCard {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 140px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.navCard:hover,
+.navCard:focus-visible,
+.reviewLink:hover,
+.reviewLink:focus-visible {
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.navCard span {
+  font-weight: 700;
+}
+
+.navCard p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.pendingList {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pendingItem {
   display: flex;
-  min-height: 100vh;
-  width: 100%;
-  max-width: 800px;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  background-color: var(--foreground);
-  padding: 120px 60px;
+  gap: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
 }
 
-.intro {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  gap: 24px;
+.pendingItem h3 {
+  margin: var(--space-2) 0;
 }
 
-.intro h1 {
-  max-width: 320px;
-  font-size: 40px;
-  font-weight: 600;
-  line-height: 48px;
-  letter-spacing: -2.4px;
-  text-wrap: balance;
-  color: var(--text-primary);
-}
-
-.intro p {
-  max-width: 440px;
-  font-size: 18px;
-  line-height: 32px;
-  text-wrap: balance;
-  color: var(--text-secondary);
-}
-
-.intro a {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.ctas {
-  display: flex;
-  flex-direction: row;
-  width: 100%;
-  max-width: 440px;
-  gap: 16px;
-  font-size: 14px;
-}
-
-.ctas a {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 40px;
-  padding: 0 16px;
-  border-radius: 128px;
-  border: 1px solid transparent;
-  transition: 0.2s;
-  cursor: pointer;
+.badge {
+  display: inline-flex;
   width: fit-content;
-  font-weight: 500;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent1) 28%, var(--surface));
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
-a.primary {
-  background: var(--text-primary);
-  color: var(--background);
-  gap: 8px;
+.reviewLink {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-weight: 700;
 }
 
-a.secondary {
-  border-color: var(--button-secondary-border);
+.emptyState {
+  margin: var(--space-4) 0 0;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  color: var(--muted);
 }
 
-/* Enable hover only on non-touch devices */
-@media (hover: hover) and (pointer: fine) {
-  a.primary:hover {
-    background: var(--button-primary-hover);
-    border-color: transparent;
+@media (max-width: 900px) {
+  .hero,
+  .cardGrid {
+    grid-template-columns: 1fr;
   }
 
-  a.secondary:hover {
-    background: var(--button-secondary-hover);
-    border-color: transparent;
-  }
-}
-
-@media (max-width: 600px) {
-  .main {
-    padding: 48px 24px;
-  }
-
-  .intro {
-    gap: 16px;
-  }
-
-  .intro h1 {
-    font-size: 32px;
-    line-height: 40px;
-    letter-spacing: -1.92px;
+  .statusGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .logo {
-    filter: invert();
-  }
-
+@media (max-width: 640px) {
   .page {
-    --background: #000;
-    --foreground: #000;
+    padding-inline: var(--space-4);
+  }
 
-    --text-primary: #ededed;
-    --text-secondary: #999;
+  .hero,
+  .section,
+  .reviewSection {
+    padding: var(--space-4);
+  }
 
-    --button-primary-hover: #ccc;
-    --button-secondary-hover: #1a1a1a;
-    --button-secondary-border: #1a1a1a;
+  .statusGrid,
+  .reviewSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .pendingItem {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reviewLink {
+    text-align: center;
   }
 }
