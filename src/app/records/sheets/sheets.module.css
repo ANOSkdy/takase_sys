@@ -1,0 +1,181 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+  padding: calc(64px + var(--space-4)) var(--space-6) var(--space-6);
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.headerText {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.headerText h1 {
+  margin: 0;
+}
+
+.headerText p,
+.emptyState,
+.meta {
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.linkButton,
+.secondaryLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  font-weight: 700;
+}
+
+.linkButton {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.secondaryLink {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.categoryCard {
+  display: grid;
+  gap: var(--space-3);
+  min-height: 148px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.categoryCard strong {
+  font-size: 1.1rem;
+}
+
+.categoryStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.gridWrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.sheetTable {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.9rem;
+}
+
+.sheetTable th,
+.sheetTable td {
+  min-width: 132px;
+  max-width: 220px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.sheetTable th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--surface));
+  font-weight: 700;
+  text-align: left;
+}
+
+.sheetTable tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--color-base) 72%, var(--surface));
+}
+
+.sheetTable tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-secondary) 16%, var(--surface));
+}
+
+.stickyName,
+.stickyMaker,
+.stickySpec {
+  position: sticky;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.sheetTable th.stickyName,
+.sheetTable th.stickyMaker,
+.sheetTable th.stickySpec {
+  z-index: 3;
+}
+
+.stickyName {
+  left: 0;
+  min-width: 240px;
+  max-width: 280px;
+}
+
+.stickyMaker {
+  left: 240px;
+  min-width: 140px;
+  max-width: 180px;
+}
+
+.stickySpec {
+  left: 380px;
+  min-width: 180px;
+  max-width: 240px;
+}
+
+.priceCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding-inline: var(--space-4);
+  }
+
+  .stickyName {
+    min-width: 180px;
+    max-width: 220px;
+  }
+
+  .stickyMaker,
+  .stickySpec {
+    position: static;
+  }
+}

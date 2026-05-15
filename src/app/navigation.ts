@@ -9,4 +9,9 @@ export const appNavigationItems = [
     title: "仕切り表",
     description: "商品・仕入先・単価の仕切り表を確認します。",
   },
+  {
+    href: "/records/sheets",
+    title: "Excel風表示",
+    description: "カテゴリをシートのように切り替えて、業者別仕切りを横展開で確認します。",
+  },
 ] as const;
