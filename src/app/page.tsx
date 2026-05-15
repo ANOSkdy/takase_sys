@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 type Classification = "NEW_CANDIDATE" | "UNMATCHED";
 
-const navigationCards = appNavigationItems.filter((item) => item.href !== "/");
+const navigationCards = appNavigationItems;
 
 function getClassificationLabel(classification: Classification) {
   switch (classification) {
@@ -53,7 +53,7 @@ export default async function Home() {
             <p className={styles.eyebrow}>PDF納品書解析・商品マスタ管理</p>
             <h1>タカセシステム</h1>
             <p>
-              PDF納品書解析、商品マスタ、差分確認への入口です。確認待ちの紐づけがある場合は、ここから各差分へ進めます。
+              PDF納品書解析と商品マスタへの入口です。確認待ちの紐づけがある場合は、ここから各差分へ進めます。
             </p>
           </div>
           <div className={styles.statusGrid} aria-label="システム状況">

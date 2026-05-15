@@ -35,16 +35,6 @@ export default function SharedNavHeader() {
       </button>
 
       <nav id={menuId} className={`${styles.nav} ${open ? styles.navOpen : ""}`}>
-        {pathname === "/records" && (
-          <Link
-            href="/records?new=1"
-            className={`${styles.navLink} ${styles.navLinkAction}`}
-            onClick={() => setOpen(false)}
-          >
-            <span className={styles.navTitle}>新規登録</span>
-            <span className={styles.navDescription}>仕切り表レコードを追加します。</span>
-          </Link>
-        )}
         {appNavigationItems.map((link) => {
           const active = isActivePath(pathname, link.href);
           return (
