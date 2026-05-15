@@ -87,7 +87,9 @@ function buildParseRunRow(input: {
   };
 }
 
-function buildLineItemRow(input: LineItemContext & { parseRunId: string }): LineItemInsert {
+function buildLineItemRow(
+  input: LineItemContext & { parseRunId: string },
+): LineItemInsert {
   return {
     lineItemId: input.lineItemId,
     parseRunId: input.parseRunId,
@@ -148,7 +150,10 @@ function buildVendorPriceRow(input: {
   };
 }
 
-function sanitizeProductName(input: { productName: string; productMaker: string | null }): string {
+function sanitizeProductName(input: {
+  productName: string;
+  productMaker: string | null;
+}): string {
   const normalizedName = normalizeText(input.productName);
   if (!normalizedName) return "";
   if (!input.productMaker) return normalizedName;
@@ -186,7 +191,10 @@ function buildUpdateHistoryRow(input: {
   };
 }
 
-function isNewerInvoiceDate(invoiceDate: string | null, priceUpdatedOn: string | null): boolean {
+function isNewerInvoiceDate(
+  invoiceDate: string | null,
+  priceUpdatedOn: string | null,
+): boolean {
   if (!invoiceDate) return false;
   if (!priceUpdatedOn) return true;
   return invoiceDate > priceUpdatedOn;
@@ -262,7 +270,9 @@ async function failParseRun(input: {
   });
 }
 
-export async function parseDocument(documentId: string): Promise<ParseDocumentResult> {
+export async function parseDocument(
+  documentId: string,
+): Promise<ParseDocumentResult> {
   const documentRow = await getDocumentRow(documentId);
   if (!documentRow || documentRow.isDeleted) {
     throw new Error("Document not found");
@@ -316,7 +326,8 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
     });
   } catch (error) {
     const detail =
-      error instanceof Error && error.message.startsWith("MULTI_PAGE_DOCUMENT_NOT_ALLOWED")
+      error instanceof Error &&
+      error.message.startsWith("MULTI_PAGE_DOCUMENT_NOT_ALLOWED")
         ? error.message
         : "PARSE_ERROR";
     const summary =
