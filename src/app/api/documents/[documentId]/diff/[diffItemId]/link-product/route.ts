@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import {
@@ -38,14 +38,19 @@ function stringOrNull(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
-export async function POST(req: Request, context: { params: Promise<{ documentId: string; diffItemId: string }> }) {
+export async function POST(
+  req: Request,
+  context: { params: Promise<{ documentId: string; diffItemId: string }> },
+) {
   const parsedParams = paramsSchema.safeParse(await context.params);
   if (!parsedParams.success) {
     return NextResponse.json({ error: "Invalid params" }, { status: 400 });
   }
 
   const formData = await req.formData();
-  const parsedForm = formSchema.safeParse({ productId: textValue(formData.get("productId")) });
+  const parsedForm = formSchema.safeParse({
+    productId: textValue(formData.get("productId")),
+  });
   if (!parsedForm.success) {
     return NextResponse.json({ error: "Invalid productId" }, { status: 400 });
   }
@@ -111,7 +116,10 @@ export async function POST(req: Request, context: { params: Promise<{ documentId
           })
           .from(vendorPrices)
           .where(
-            and(eq(vendorPrices.productId, productId), eq(vendorPrices.vendorName, diff.vendorName)),
+            and(
+              eq(vendorPrices.productId, productId),
+              eq(vendorPrices.vendorName, diff.vendorName),
+            ),
           )
           .limit(1)
       : [];
@@ -122,7 +130,8 @@ export async function POST(req: Request, context: { params: Promise<{ documentId
     const beforeUnitPrice = existingVendor?.unitPrice ?? null;
 
     const hasPriceChange =
-      afterUnitPrice !== null && (beforeUnitPrice === null || afterUnitPrice !== beforeUnitPrice);
+      afterUnitPrice !== null &&
+      (beforeUnitPrice === null || afterUnitPrice !== beforeUnitPrice);
     const hasSpecChange = afterSpec !== null && afterSpec !== (product.spec ?? null);
 
     let classification = hasPriceChange || hasSpecChange ? "UPDATE" : "NO_CHANGE";
