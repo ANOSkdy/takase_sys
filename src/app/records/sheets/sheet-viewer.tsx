@@ -118,9 +118,10 @@ export default function ProductSheetViewer({
                 scroll={false}
                 className={`${styles.sheetTab} ${active ? styles.sheetTabActive : ""}`}
                 aria-current={active ? "page" : undefined}
+                aria-label={`${item.category}（${item.productCount.toLocaleString("ja-JP")}商品）`}
+                title={`${item.category}（${item.productCount.toLocaleString("ja-JP")}商品）`}
               >
                 <span>{item.category}</span>
-                <small>{item.productCount.toLocaleString("ja-JP")} 商品</small>
               </Link>
             );
           })}

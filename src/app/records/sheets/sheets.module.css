@@ -2,7 +2,7 @@
   display: grid;
   gap: var(--space-4);
   min-height: 100vh;
-  padding: calc(64px + var(--space-4)) var(--space-6) calc(76px + var(--space-4));
+  padding: calc(64px + var(--space-4)) var(--space-6) calc(44px + var(--space-4));
 }
 
 .header {
@@ -90,34 +90,17 @@
   background: color-mix(in srgb, var(--color-secondary) 16%, var(--surface));
 }
 
-.stickyName,
-.stickyMaker,
-.stickySpec {
-  position: sticky;
-  z-index: 1;
-  background: var(--surface);
-}
-
-.sheetTable th.stickyName,
-.sheetTable th.stickyMaker,
-.sheetTable th.stickySpec {
-  z-index: 3;
-}
-
 .stickyName {
-  left: 0;
   min-width: 240px;
   max-width: 280px;
 }
 
 .stickyMaker {
-  left: 240px;
   min-width: 140px;
   max-width: 180px;
 }
 
 .stickySpec {
-  left: 380px;
   min-width: 180px;
   max-width: 240px;
 }
@@ -134,35 +117,33 @@
   left: 0;
   z-index: 30;
   display: flex;
-  gap: 2px;
+  gap: 1px;
   overflow-x: auto;
   border-top: 1px solid var(--border);
-  padding: var(--space-2) var(--space-6);
+  padding: 4px var(--space-6);
   background: color-mix(in srgb, var(--surface) 94%, transparent);
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.06);
 }
 
 .sheetTab {
-  display: grid;
-  gap: 2px;
-  min-width: 148px;
+  display: block;
+  min-width: 96px;
+  max-width: 176px;
   border: 1px solid var(--border);
-  border-bottom: 3px solid var(--border);
-  border-radius: 10px 10px 0 0;
-  padding: 8px 12px;
+  border-bottom: 2px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  padding: 5px 10px;
   background: color-mix(in srgb, var(--color-base) 70%, var(--surface));
+  font-size: 0.84rem;
+  line-height: 1.2;
 }
 
 .sheetTab span {
+  display: block;
   overflow: hidden;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.sheetTab small {
-  color: var(--muted);
-  font-size: 0.78rem;
 }
 
 .sheetTabActive {
@@ -179,11 +160,6 @@
   .stickyName {
     min-width: 180px;
     max-width: 220px;
-  }
-
-  .stickyMaker,
-  .stickySpec {
-    position: static;
   }
 
   .sheetTabs {
