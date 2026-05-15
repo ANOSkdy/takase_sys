@@ -50,10 +50,10 @@ export default async function Home() {
       <main className={styles.page}>
         <section className={styles.hero}>
           <div className={styles.heroText}>
-            <p className={styles.eyebrow}>PDF納品書解析・商品マスタ管理</p>
+            <p className={styles.eyebrow}>PDF納品書解析・仕切り表管理</p>
             <h1>タカセシステム</h1>
             <p>
-              PDF納品書解析と商品マスタへの入口です。確認待ちの紐づけがある場合は、ここから各差分へ進めます。
+              PDF納品書解析と仕切り表への入口です。確認待ちの紐づけがある場合は、ここから各差分へ進めます。
             </p>
           </div>
           <div className={styles.statusGrid} aria-label="システム状況">
@@ -82,7 +82,7 @@ export default async function Home() {
           <div className={styles.sectionHeader}>
             <p className={styles.eyebrow}>紐づけ確認</p>
             <h2 id="review-heading">確認待ちのPDF解析結果</h2>
-            <p>NEW_CANDIDATE / UNMATCHED の差分は、商品マスタへ反映する前に確認が必要です。</p>
+            <p>NEW_CANDIDATE / UNMATCHED の差分は、登録情報へ反映する前に確認が必要です。</p>
           </div>
 
           <div className={styles.reviewSummary}>
