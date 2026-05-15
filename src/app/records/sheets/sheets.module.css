@@ -1,7 +1,8 @@
 .page {
   display: grid;
   gap: var(--space-4);
-  padding: calc(64px + var(--space-4)) var(--space-6) var(--space-6);
+  min-height: 100vh;
+  padding: calc(64px + var(--space-4)) var(--space-6) calc(76px + var(--space-4));
 }
 
 .header {
@@ -33,54 +34,16 @@
   gap: var(--space-2);
 }
 
-.linkButton,
 .secondaryLink {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 40px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 0 var(--space-3);
+  background: var(--surface);
   font-weight: 700;
-}
-
-.linkButton {
-  background: var(--color-primary);
-  color: #fff;
-}
-
-.secondaryLink {
-  border: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.categoryGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--space-3);
-}
-
-.categoryCard {
-  display: grid;
-  gap: var(--space-3);
-  min-height: 148px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
-}
-
-.categoryCard strong {
-  font-size: 1.1rem;
-}
-
-.categoryStats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  color: var(--muted);
-  font-size: 0.9rem;
 }
 
 .gridWrap {
@@ -164,6 +127,50 @@
   font-variant-numeric: tabular-nums;
 }
 
+.sheetTabs {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+  padding: var(--space-2) var(--space-6);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.sheetTab {
+  display: grid;
+  gap: 2px;
+  min-width: 148px;
+  border: 1px solid var(--border);
+  border-bottom: 3px solid var(--border);
+  border-radius: 10px 10px 0 0;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--color-base) 70%, var(--surface));
+}
+
+.sheetTab span {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheetTab small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.sheetTabActive {
+  border-color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  background: var(--surface);
+}
+
 @media (max-width: 720px) {
   .page {
     padding-inline: var(--space-4);
@@ -177,5 +184,9 @@
   .stickyMaker,
   .stickySpec {
     position: static;
+  }
+
+  .sheetTabs {
+    padding-inline: var(--space-4);
   }
 }
