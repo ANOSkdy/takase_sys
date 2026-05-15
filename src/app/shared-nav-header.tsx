@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useId, useState } from "react";
+import { appNavigationItems } from "./navigation";
 import styles from "./shared-nav-header.module.css";
 
-const links = [
-  { href: "/records", label: "仕切り表" },
-  { href: "/documents", label: "納品書PDF" },
-] as const;
+function isActivePath(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export default function SharedNavHeader() {
   const pathname = usePathname();
@@ -17,7 +18,9 @@ export default function SharedNavHeader() {
 
   return (
     <header className={styles.header}>
-      <div className={styles.brand}>タカセシステム</div>
+      <Link href="/" className={styles.brand} onClick={() => setOpen(false)}>
+        タカセシステム
+      </Link>
       <button
         type="button"
         className={styles.menuButton}
@@ -38,19 +41,21 @@ export default function SharedNavHeader() {
             className={`${styles.navLink} ${styles.navLinkAction}`}
             onClick={() => setOpen(false)}
           >
-            新規登録
+            <span className={styles.navTitle}>新規登録</span>
+            <span className={styles.navDescription}>仕切り表レコードを追加します。</span>
           </Link>
         )}
-        {links.map((link) => {
-          const active = pathname === link.href;
+        {appNavigationItems.map((link) => {
+          const active = isActivePath(pathname, link.href);
           return (
             <Link
-              key={link.href}
+              key={`${link.href}-${link.title}`}
               href={link.href}
               className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}
               onClick={() => setOpen(false)}
             >
-              {link.label}
+              <span className={styles.navTitle}>{link.title}</span>
+              <span className={styles.navDescription}>{link.description}</span>
             </Link>
           );
         })}
