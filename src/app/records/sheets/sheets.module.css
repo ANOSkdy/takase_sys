@@ -166,3 +166,110 @@
     padding-inline: var(--space-4);
   }
 }
+
+.editToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.editActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-4);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: white;
+}
+
+.secondaryButton {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cellInput {
+  width: 100%;
+  min-width: 112px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.cellInput:focus {
+  border-color: var(--color-primary);
+  background: var(--surface);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.priceInput {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.formattedValue {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dirtyCell,
+.sheetTable tbody tr:nth-child(even) td.dirtyCell,
+.sheetTable tbody tr:hover td.dirtyCell {
+  background: color-mix(in srgb, var(--color-secondary) 24%, var(--surface));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-secondary) 58%, transparent);
+}
+
+.invalidCell,
+.sheetTable tbody tr:nth-child(even) td.invalidCell,
+.sheetTable tbody tr:hover td.invalidCell {
+  background: color-mix(in srgb, #dc2626 12%, var(--surface));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, #dc2626 62%, transparent);
+}
+
+.errorMessage,
+.successMessage {
+  margin: 0;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-weight: 700;
+}
+
+.errorMessage {
+  border: 1px solid color-mix(in srgb, #dc2626 55%, var(--border));
+  background: color-mix(in srgb, #dc2626 10%, var(--surface));
+  color: #991b1b;
+}
+
+.successMessage {
+  border: 1px solid color-mix(in srgb, #16a34a 55%, var(--border));
+  background: color-mix(in srgb, #16a34a 10%, var(--surface));
+  color: #166534;
+}
