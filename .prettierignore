@@ -5,7 +5,3 @@ out
 .vercel
 .github/workflows/*.yml
 .github/workflows/*.yaml
-src/app/api/documents/*/diff/*/link-product/route.ts
-src/app/documents/*/diff/*/link/page.tsx
-src/app/documents/*/diff/page.tsx
-src/services/documents/parse.ts
