@@ -252,11 +252,17 @@ export default function ProductSheetViewer({
             </div>
           </div>
           {hasInvalidDirtyPrice && (
-            <p className={styles.errorMessage}>仕切りは0以上999999999以下の数値で入力してください。</p>
+            <p className={styles.errorMessage}>
+              仕切りは0以上999999999以下の数値で入力してください。
+            </p>
           )}
           {errorMessage && <p className={styles.errorMessage}>{errorMessage}</p>}
           {successMessage && <p className={styles.successMessage}>{successMessage}</p>}
-          <div className={styles.gridWrap} role="region" aria-label={`${currentGrid.category}の仕切り表`}>
+          <div
+            className={styles.gridWrap}
+            role="region"
+            aria-label={`${currentGrid.category}の仕切り表`}
+          >
             <table className={styles.sheetTable}>
               <thead>
                 <tr>
@@ -303,7 +309,8 @@ export default function ProductSheetViewer({
                       const isDateDirty = dirtyFields.has(priceUpdatedOnKey);
                       const isPriceDirty = dirtyFields.has(unitPriceKey);
                       const isPriceInvalid =
-                        isPriceDirty && (normalizePrice(priceValue) === null || Number(priceValue) > 999999999);
+                        isPriceDirty &&
+                        (normalizePrice(priceValue) === null || Number(priceValue) > 999999999);
 
                       return (
                         <Fragment key={`${row.productId}-${vendor.vendorName}`}>
@@ -335,10 +342,17 @@ export default function ProductSheetViewer({
                               value={priceValue}
                               aria-label={`${row.productName} ${vendor.vendorName} 仕切り`}
                               onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                                updateDraft(price.vendorPriceId, "unitPrice", event.target.value, originalPrice)
+                                updateDraft(
+                                  price.vendorPriceId,
+                                  "unitPrice",
+                                  event.target.value,
+                                  originalPrice,
+                                )
                               }
                             />
-                            <span className={styles.formattedValue}>{formatPrice(price.unitPrice)}</span>
+                            <span className={styles.formattedValue}>
+                              {formatPrice(price.unitPrice)}
+                            </span>
                           </td>
                         </Fragment>
                       );

@@ -130,8 +130,7 @@ export async function POST(
     const beforeUnitPrice = existingVendor?.unitPrice ?? null;
 
     const hasPriceChange =
-      afterUnitPrice !== null &&
-      (beforeUnitPrice === null || afterUnitPrice !== beforeUnitPrice);
+      afterUnitPrice !== null && (beforeUnitPrice === null || afterUnitPrice !== beforeUnitPrice);
     const hasSpecChange = afterSpec !== null && afterSpec !== (product.spec ?? null);
 
     let classification = hasPriceChange || hasSpecChange ? "UPDATE" : "NO_CHANGE";

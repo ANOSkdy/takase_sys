@@ -51,10 +51,14 @@ export const updateProductSheetCellsSchema = z
   .object({
     cells: z.array(updateProductSheetCellSchema).min(1).max(maxChangedCells),
   })
-  .refine((payload) => new Set(payload.cells.map((cell) => cell.vendorPriceId)).size === payload.cells.length, {
-    message: "Duplicate vendorPriceId is not allowed",
-    path: ["cells"],
-  });
+  .refine(
+    (payload) =>
+      new Set(payload.cells.map((cell) => cell.vendorPriceId)).size === payload.cells.length,
+    {
+      message: "Duplicate vendorPriceId is not allowed",
+      path: ["cells"],
+    },
+  );
 
 export type ProductSheetCategory = {
   category: string;
@@ -265,14 +269,16 @@ export async function updateProductSheetCells(
       if (!current) throw new ProductSheetCellsNotFoundError();
 
       const unitPriceChanged =
-        cell.unitPrice !== undefined && normalizePrice(current.unitPrice) !== normalizePrice(cell.unitPrice);
+        cell.unitPrice !== undefined &&
+        normalizePrice(current.unitPrice) !== normalizePrice(cell.unitPrice);
       const priceUpdatedOnBefore = toIsoDate(current.priceUpdatedOn);
       const priceUpdatedOnChanged =
         cell.priceUpdatedOn !== undefined && priceUpdatedOnBefore !== cell.priceUpdatedOn;
 
       if (!unitPriceChanged && !priceUpdatedOnChanged) continue;
 
-      const nextUnitPrice = unitPriceChanged && cell.unitPrice !== undefined ? cell.unitPrice : current.unitPrice;
+      const nextUnitPrice =
+        unitPriceChanged && cell.unitPrice !== undefined ? cell.unitPrice : current.unitPrice;
       const nextPriceUpdatedOn =
         priceUpdatedOnChanged && cell.priceUpdatedOn !== undefined
           ? cell.priceUpdatedOn
