@@ -469,6 +469,9 @@ export default function ProductSheetViewer({
           </p>
         </div>
         <div className={styles.actions}>
+          <Link href="/records/sheets/new" className={styles.primaryButton}>
+            シート追加
+          </Link>
           <Link href="/records" className={styles.secondaryLink}>
             仕切り表へ戻る
           </Link>
