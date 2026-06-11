@@ -47,6 +47,9 @@
 }
 
 .topScrollBar {
+  position: sticky;
+  top: calc(64px + var(--space-2));
+  z-index: 20;
   display: none;
   overflow-x: auto;
   overflow-y: hidden;
