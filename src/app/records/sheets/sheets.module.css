@@ -46,6 +46,25 @@
   font-weight: 700;
 }
 
+.topScrollBar {
+  display: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.topScrollBar[data-visible="true"] {
+  display: block;
+}
+
+.topScrollSpacer {
+  height: 1px;
+}
+
 .gridWrap {
   overflow: auto;
   border: 1px solid var(--border);
