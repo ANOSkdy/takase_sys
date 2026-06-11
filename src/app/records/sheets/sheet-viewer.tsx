@@ -2,28 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-  type FormEvent,
-} from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import type { ProductSheetCategory, ProductSheetGrid } from "@/services/records/sheets";
 import styles from "./sheets.module.css";
 
 const numberFormat = new Intl.NumberFormat("ja-JP");
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
-type EditableField = "unitPrice" | "priceUpdatedOn";
-type DirtyCell = {
-  vendorPriceId: string;
-  unitPrice?: number | string;
-  priceUpdatedOn?: string | null;
-};
 type ProblemResponse = {
   status?: number;
 };
@@ -36,6 +21,22 @@ type ProductFormState = {
   priceUpdatedOn: string;
 };
 type ProductFormErrors = Partial<Record<keyof ProductFormState | "form", string>>;
+
+type VendorPriceModalMode = "create" | "edit";
+type VendorPriceModalState = {
+  mode: VendorPriceModalMode;
+  productId: string;
+  productName: string;
+  spec: string | null;
+  vendorName: string;
+  vendorPriceId: string | null;
+};
+type VendorPriceFormState = {
+  unitPrice: string;
+  priceUpdatedOn: string;
+};
+type VendorPriceFormErrors = Partial<Record<keyof VendorPriceFormState | "form", string>>;
+
 type ApiErrorResponse = {
   error?: {
     code?: string;
@@ -71,24 +72,9 @@ function formatPrice(value: string | number | null | undefined) {
   return numberFormat.format(numeric);
 }
 
-function toPriceInputValue(value: string | number | null | undefined) {
-  if (value == null) return "";
-  return String(value);
-}
-
-function normalizePrice(value: string | number | null | undefined) {
-  if (value == null || String(value).trim() === "") return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric.toFixed(2) : null;
-}
-
 function getSheetHref(category: string, index: number) {
   if (index === 0) return "/records/sheets";
   return `/records/sheets/${encodeURIComponent(category)}`;
-}
-
-function getDirtyKey(vendorPriceId: string, field: EditableField) {
-  return `${vendorPriceId}:${field}`;
 }
 
 function getProblemMessage(problem: ProblemResponse | null) {
@@ -105,6 +91,42 @@ function getCreateProductErrorMessage(status: number, problem: ApiErrorResponse 
     return "同じ品名・規格の商品が既に存在します。";
   }
   return "登録に失敗しました。時間をおいて再度お試しください。";
+}
+
+function getVendorPriceErrorMessage(status: number, problem: ApiErrorResponse | null) {
+  if (status === 400) return "入力内容を確認してください。";
+  if (status === 404) return "対象の商品が見つかりません。画面を更新して再度お試しください。";
+  if (status === 409 && problem?.error?.code === "VENDOR_PRICE_ALREADY_EXISTS") {
+    return "この業者価格は既に登録されています。画面を更新して再度お試しください。";
+  }
+  return "保存に失敗しました。時間をおいて再度お試しください。";
+}
+
+function validateVendorPriceForm(form: VendorPriceFormState) {
+  const errors: VendorPriceFormErrors = {};
+  const unitPriceText = form.unitPrice.trim();
+  const priceUpdatedOn = form.priceUpdatedOn.trim();
+
+  if (!unitPriceText) {
+    errors.unitPrice = "仕切りを入力してください。";
+  } else {
+    const unitPrice = Number(unitPriceText);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0 || unitPrice > 999999999) {
+      errors.unitPrice = "仕切りは0以上999999999以下の数値で入力してください。";
+    }
+  }
+
+  if (priceUpdatedOn && !dateRegex.test(priceUpdatedOn)) {
+    errors.priceUpdatedOn = "最終更新日はYYYY-MM-DD形式で入力してください。";
+  }
+
+  return {
+    errors,
+    values: {
+      unitPrice: unitPriceText ? Number(unitPriceText) : null,
+      priceUpdatedOn: priceUpdatedOn || null,
+    },
+  };
 }
 
 function validateProductForm(form: ProductFormState) {
@@ -163,15 +185,19 @@ export default function ProductSheetViewer({
 }) {
   const router = useRouter();
   const [currentGrid, setCurrentGrid] = useState(grid);
-  const [draftValues, setDraftValues] = useState<Record<string, string>>({});
-  const [dirtyFields, setDirtyFields] = useState<Set<string>>(() => new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingVendorPrice, setIsSavingVendorPrice] = useState(false);
   const [isProductFormOpen, setIsProductFormOpen] = useState(false);
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
   const [productForm, setProductForm] = useState<ProductFormState>(initialProductForm);
   const [productFormErrors, setProductFormErrors] = useState<ProductFormErrors>({});
+  const [vendorPriceModal, setVendorPriceModal] = useState<VendorPriceModalState | null>(null);
+  const [vendorPriceForm, setVendorPriceForm] = useState<VendorPriceFormState>({
+    unitPrice: "",
+    priceUpdatedOn: "",
+  });
+  const [vendorPriceFormErrors, setVendorPriceFormErrors] = useState<VendorPriceFormErrors>({});
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -217,8 +243,6 @@ export default function ProductSheetViewer({
 
   useEffect(() => {
     setCurrentGrid(grid);
-    setDraftValues({});
-    setDirtyFields(new Set());
     setErrorMessage(null);
     setSuccessMessage(null);
   }, [grid]);
@@ -242,79 +266,7 @@ export default function ProductSheetViewer({
     return () => resizeObserver.disconnect();
   }, [currentGrid, updateTopScrollbar]);
 
-  const dirtyPayload = useMemo(() => {
-    if (!currentGrid) return [];
-
-    const cells = new Map<string, DirtyCell>();
-    for (const row of currentGrid.rows) {
-      for (const vendor of currentGrid.vendors) {
-        const price = row.prices[vendor.vendorName];
-        if (!price) continue;
-
-        const unitPriceKey = getDirtyKey(price.vendorPriceId, "unitPrice");
-        if (dirtyFields.has(unitPriceKey)) {
-          cells.set(price.vendorPriceId, {
-            ...cells.get(price.vendorPriceId),
-            vendorPriceId: price.vendorPriceId,
-            unitPrice: draftValues[unitPriceKey] ?? "",
-          });
-        }
-
-        const priceUpdatedOnKey = getDirtyKey(price.vendorPriceId, "priceUpdatedOn");
-        if (dirtyFields.has(priceUpdatedOnKey)) {
-          const draftDate = draftValues[priceUpdatedOnKey] ?? "";
-          cells.set(price.vendorPriceId, {
-            ...cells.get(price.vendorPriceId),
-            vendorPriceId: price.vendorPriceId,
-            priceUpdatedOn: draftDate.length > 0 ? draftDate : null,
-          });
-        }
-      }
-    }
-
-    return Array.from(cells.values());
-  }, [currentGrid, dirtyFields, draftValues]);
-
-  const dirtyCount = dirtyFields.size;
-  const hasInvalidDirtyPrice = dirtyPayload.some((cell) => {
-    if (cell.unitPrice === undefined) return false;
-    const numeric = Number(cell.unitPrice);
-    return !Number.isFinite(numeric) || numeric < 0 || numeric > 999999999;
-  });
-
-  function updateDraft(
-    vendorPriceId: string,
-    field: EditableField,
-    nextValue: string,
-    originalValue: string,
-  ) {
-    const key = getDirtyKey(vendorPriceId, field);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setDraftValues((current) => ({ ...current, [key]: nextValue }));
-    setDirtyFields((current) => {
-      const next = new Set(current);
-      if (nextValue === originalValue) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  }
-
-  function discardChanges() {
-    setDraftValues({});
-    setDirtyFields(new Set());
-    setErrorMessage(null);
-    setSuccessMessage(null);
-  }
-
   function openProductForm() {
-    if (dirtyCount > 0) {
-      setErrorMessage("未保存の変更を保存または破棄してから商品を追加してください。");
-      return;
-    }
     setProductFormErrors({});
     setProductForm(initialProductForm);
     setIsProductFormOpen(true);
@@ -342,7 +294,7 @@ export default function ProductSheetViewer({
 
   async function createProduct(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!currentGrid || dirtyCount > 0) return;
+    if (!currentGrid) return;
 
     const { errors, values } = validateProductForm(productForm);
     if (Object.keys(errors).length > 0) {
@@ -406,31 +358,126 @@ export default function ProductSheetViewer({
     }
   }
 
-  async function saveChanges() {
-    if (!currentGrid || dirtyPayload.length === 0 || dirtyCount === 0) return;
-    if (hasInvalidDirtyPrice) {
-      setErrorMessage("仕切りは0以上999999999以下の数値で入力してください。");
+  function openVendorPriceModal(
+    row: ProductSheetGrid["rows"][number],
+    vendorName: string,
+    price: ProductSheetGrid["rows"][number]["prices"][string] | undefined,
+  ) {
+    if (!vendorName.trim()) {
+      setErrorMessage("業者名を確認できないため、価格を登録できません。画面を更新してください。");
       return;
     }
-    if (!window.confirm(`${dirtyCount}件のセル変更を保存します。よろしいですか？`)) return;
 
-    setIsSaving(true);
+    setVendorPriceModal({
+      mode: price ? "edit" : "create",
+      productId: row.productId,
+      productName: row.productName,
+      spec: row.spec,
+      vendorName,
+      vendorPriceId: price?.vendorPriceId ?? null,
+    });
+    setVendorPriceForm({
+      unitPrice: price ? String(price.unitPrice) : "",
+      priceUpdatedOn: toDateInputValue(price?.priceUpdatedOn),
+    });
+    setVendorPriceFormErrors({});
+    setErrorMessage(null);
+    setSuccessMessage(null);
+  }
+
+  function closeVendorPriceModal() {
+    if (isSavingVendorPrice) return;
+    setVendorPriceModal(null);
+    setVendorPriceForm({ unitPrice: "", priceUpdatedOn: "" });
+    setVendorPriceFormErrors({});
+  }
+
+  function updateVendorPriceFormField(field: keyof VendorPriceFormState, value: string) {
+    setVendorPriceForm((current) => ({ ...current, [field]: value }));
+    setVendorPriceFormErrors((current) => {
+      if (!current[field] && !current.form) return current;
+      const next = { ...current };
+      delete next[field];
+      delete next.form;
+      return next;
+    });
+  }
+
+  async function saveVendorPrice(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!currentGrid || !vendorPriceModal || isSavingVendorPrice) return;
+
+    const { errors, values } = validateVendorPriceForm(vendorPriceForm);
+    if (Object.keys(errors).length > 0 || values.unitPrice === null) {
+      setVendorPriceFormErrors(errors);
+      return;
+    }
+
+    setIsSavingVendorPrice(true);
+    setVendorPriceFormErrors({});
     setErrorMessage(null);
     setSuccessMessage(null);
 
     try {
+      if (vendorPriceModal.mode === "create") {
+        const response = await fetch(
+          `/api/records/products/${encodeURIComponent(vendorPriceModal.productId)}/vendor-prices`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              vendorName: vendorPriceModal.vendorName,
+              unitPrice: values.unitPrice,
+              priceUpdatedOn: values.priceUpdatedOn,
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          const problem = (await response.json().catch(() => null)) as ApiErrorResponse | null;
+          setVendorPriceFormErrors({
+            form: getVendorPriceErrorMessage(response.status, problem),
+          });
+          return;
+        }
+
+        setVendorPriceModal(null);
+        setVendorPriceForm({ unitPrice: "", priceUpdatedOn: "" });
+        setVendorPriceFormErrors({});
+        setSuccessMessage("業者価格を登録しました。シートを更新しています。");
+        router.refresh();
+        return;
+      }
+
+      if (!vendorPriceModal.vendorPriceId) {
+        setVendorPriceFormErrors({
+          form: "業者価格のIDを確認できません。画面を更新して再度お試しください。",
+        });
+        return;
+      }
+
       const response = await fetch(
         `/api/records/sheets/${encodeURIComponent(currentGrid.category)}/cells`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ cells: dirtyPayload }),
+          body: JSON.stringify({
+            cells: [
+              {
+                vendorPriceId: vendorPriceModal.vendorPriceId,
+                unitPrice: values.unitPrice,
+                priceUpdatedOn: values.priceUpdatedOn,
+              },
+            ],
+          }),
         },
       );
 
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as ProblemResponse | null;
-        setErrorMessage(getProblemMessage(problem ?? { status: response.status }));
+        setVendorPriceFormErrors({
+          form: getProblemMessage(problem ?? { status: response.status }),
+        });
         return;
       }
 
@@ -440,18 +487,20 @@ export default function ProductSheetViewer({
         grid: ProductSheetGrid;
       };
       setCurrentGrid(result.grid);
-      setDraftValues({});
-      setDirtyFields(new Set());
+      setVendorPriceModal(null);
+      setVendorPriceForm({ unitPrice: "", priceUpdatedOn: "" });
+      setVendorPriceFormErrors({});
       setSuccessMessage(
         result.changedCount === 0
           ? "保存対象の実変更はありませんでした。"
-          : `${result.changedCount.toLocaleString("ja-JP")}件の変更を保存しました。`,
+          : "業者価格を保存しました。シートを更新しています。",
       );
+      router.refresh();
     } catch (error) {
-      console.error("[records:sheets] save failed", error);
-      setErrorMessage("保存に失敗しました。時間をおいて再度お試しください。");
+      console.error("[records:sheets] vendor price save failed", error);
+      setVendorPriceFormErrors({ form: "保存に失敗しました。時間をおいて再度お試しください。" });
     } finally {
-      setIsSaving(false);
+      setIsSavingVendorPrice(false);
     }
   }
 
@@ -464,7 +513,7 @@ export default function ProductSheetViewer({
             {currentGrid
               ? `${currentGrid.rows.length.toLocaleString("ja-JP")} 商品 / ${currentGrid.vendors.length.toLocaleString(
                   "ja-JP",
-                )} 業者のシートです。仕切りと最終更新日をセル単位で編集できます。`
+                )} 業者のシートです。仕切りと最終更新日はセルをクリックしてモーダルで編集できます。`
               : "カテゴリをシートのように切り替えて、業者別仕切りを横展開で確認します。"}
           </p>
         </div>
@@ -483,42 +532,18 @@ export default function ProductSheetViewer({
       ) : (
         <>
           <div className={styles.editToolbar}>
-            <p className={styles.meta}>未保存の変更 {dirtyCount.toLocaleString("ja-JP")}件</p>
+            <p className={styles.meta}>価格セルまたは日付セルをクリックして追加・編集できます。</p>
             <div className={styles.editActions}>
               <button
                 type="button"
                 className={styles.secondaryButton}
                 onClick={openProductForm}
-                disabled={dirtyCount > 0 || isSaving || isCreatingProduct}
-                title={
-                  dirtyCount > 0 ? "未保存の変更を保存または破棄してから追加できます。" : undefined
-                }
+                disabled={isCreatingProduct}
               >
                 商品追加
               </button>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={discardChanges}
-                disabled={dirtyCount === 0 || isSaving}
-              >
-                変更を破棄
-              </button>
-              <button
-                type="button"
-                className={styles.primaryButton}
-                onClick={saveChanges}
-                disabled={dirtyCount === 0 || isSaving || hasInvalidDirtyPrice}
-              >
-                {isSaving ? "保存中..." : "保存"}
-              </button>
             </div>
           </div>
-          {dirtyCount > 0 && (
-            <p className={styles.meta}>
-              商品追加は、未保存のセル変更を保存または破棄すると利用できます。
-            </p>
-          )}
           {isProductFormOpen && (
             <div className={styles.modalOverlay} role="presentation">
               <section
@@ -678,10 +703,114 @@ export default function ProductSheetViewer({
               </section>
             </div>
           )}
-          {hasInvalidDirtyPrice && (
-            <p className={styles.errorMessage}>
-              仕切りは0以上999999999以下の数値で入力してください。
-            </p>
+          {vendorPriceModal && (
+            <div className={styles.modalOverlay} role="presentation">
+              <section
+                className={styles.productDialog}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="vendor-price-title"
+              >
+                <div className={styles.productDialogHeader}>
+                  <div>
+                    <h2 id="vendor-price-title">
+                      {vendorPriceModal.mode === "create" ? "業者価格追加" : "業者価格編集"}
+                    </h2>
+                    <p>商品と業者を確認して、仕切りと最終更新日を保存します。</p>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.iconButton}
+                    onClick={closeVendorPriceModal}
+                    disabled={isSavingVendorPrice}
+                    aria-label="業者価格フォームを閉じる"
+                  >
+                    ×
+                  </button>
+                </div>
+                <form className={styles.productForm} onSubmit={saveVendorPrice} noValidate>
+                  {vendorPriceFormErrors.form && (
+                    <p className={styles.errorMessage}>{vendorPriceFormErrors.form}</p>
+                  )}
+                  <dl className={styles.contextList}>
+                    <div>
+                      <dt>商品</dt>
+                      <dd>{vendorPriceModal.productName}</dd>
+                    </div>
+                    <div>
+                      <dt>規格</dt>
+                      <dd>{vendorPriceModal.spec || "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>業者</dt>
+                      <dd>{vendorPriceModal.vendorName}</dd>
+                    </div>
+                  </dl>
+                  <div className={styles.formGrid}>
+                    <label className={styles.formField}>
+                      <span>
+                        仕切り <strong aria-hidden="true">*</strong>
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="999999999"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={vendorPriceForm.unitPrice}
+                        required
+                        aria-invalid={Boolean(vendorPriceFormErrors.unitPrice)}
+                        onChange={(event) =>
+                          updateVendorPriceFormField("unitPrice", event.target.value)
+                        }
+                      />
+                      {vendorPriceFormErrors.unitPrice && (
+                        <small className={styles.fieldError}>
+                          {vendorPriceFormErrors.unitPrice}
+                        </small>
+                      )}
+                    </label>
+                    <label className={styles.formField}>
+                      <span>最終更新日</span>
+                      <input
+                        type="date"
+                        value={vendorPriceForm.priceUpdatedOn}
+                        aria-invalid={Boolean(vendorPriceFormErrors.priceUpdatedOn)}
+                        onChange={(event) =>
+                          updateVendorPriceFormField("priceUpdatedOn", event.target.value)
+                        }
+                      />
+                      {vendorPriceFormErrors.priceUpdatedOn && (
+                        <small className={styles.fieldError}>
+                          {vendorPriceFormErrors.priceUpdatedOn}
+                        </small>
+                      )}
+                    </label>
+                  </div>
+                  <div className={styles.formActions}>
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={closeVendorPriceModal}
+                      disabled={isSavingVendorPrice}
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="submit"
+                      className={styles.primaryButton}
+                      disabled={isSavingVendorPrice}
+                    >
+                      {isSavingVendorPrice
+                        ? "保存中..."
+                        : vendorPriceModal.mode === "create"
+                          ? "登録"
+                          : "保存"}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>
           )}
           {errorMessage && <p className={styles.errorMessage}>{errorMessage}</p>}
           {successMessage && <p className={styles.successMessage}>{successMessage}</p>}
@@ -735,71 +864,35 @@ export default function ProductSheetViewer({
                         <td className={styles.stickySpec}>{row.spec ?? "-"}</td>
                         {currentGrid.vendors.map((vendor) => {
                           const price = row.prices[vendor.vendorName];
-                          if (!price) {
-                            return (
-                              <Fragment key={`${row.productId}-${vendor.vendorName}`}>
-                                <td>-</td>
-                                <td className={styles.priceCell}>-</td>
-                              </Fragment>
-                            );
-                          }
-
-                          const priceUpdatedOnKey = getDirtyKey(
-                            price.vendorPriceId,
-                            "priceUpdatedOn",
-                          );
-                          const unitPriceKey = getDirtyKey(price.vendorPriceId, "unitPrice");
-                          const originalDate = toDateInputValue(price.priceUpdatedOn);
-                          const originalPrice = toPriceInputValue(price.unitPrice);
-                          const dateValue = draftValues[priceUpdatedOnKey] ?? originalDate;
-                          const priceValue = draftValues[unitPriceKey] ?? originalPrice;
-                          const isDateDirty = dirtyFields.has(priceUpdatedOnKey);
-                          const isPriceDirty = dirtyFields.has(unitPriceKey);
-                          const isPriceInvalid =
-                            isPriceDirty &&
-                            (normalizePrice(priceValue) === null || Number(priceValue) > 999999999);
+                          const modalModeLabel = price ? "編集" : "追加";
+                          const dateLabel = toDateInputValue(price?.priceUpdatedOn) || "-";
+                          const priceLabel = price ? formatPrice(price.unitPrice) : "-";
 
                           return (
                             <Fragment key={`${row.productId}-${vendor.vendorName}`}>
-                              <td className={isDateDirty ? styles.dirtyCell : undefined}>
-                                <input
-                                  type="date"
-                                  className={styles.cellInput}
-                                  value={dateValue}
-                                  aria-label={`${row.productName} ${vendor.vendorName} 最終更新日`}
-                                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                                    updateDraft(
-                                      price.vendorPriceId,
-                                      "priceUpdatedOn",
-                                      event.target.value,
-                                      originalDate,
-                                    )
+                              <td>
+                                <button
+                                  type="button"
+                                  className={styles.cellButton}
+                                  onClick={() =>
+                                    openVendorPriceModal(row, vendor.vendorName, price)
                                   }
-                                />
+                                  aria-label={`${row.productName} ${vendor.vendorName} 最終更新日を${modalModeLabel}`}
+                                >
+                                  {dateLabel}
+                                </button>
                               </td>
-                              <td
-                                className={`${styles.priceCell} ${isPriceDirty ? styles.dirtyCell : ""} ${
-                                  isPriceInvalid ? styles.invalidCell : ""
-                                }`}
-                              >
-                                <input
-                                  type="text"
-                                  inputMode="decimal"
-                                  className={`${styles.cellInput} ${styles.priceInput}`}
-                                  value={priceValue}
-                                  aria-label={`${row.productName} ${vendor.vendorName} 仕切り`}
-                                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                                    updateDraft(
-                                      price.vendorPriceId,
-                                      "unitPrice",
-                                      event.target.value,
-                                      originalPrice,
-                                    )
+                              <td className={styles.priceCell}>
+                                <button
+                                  type="button"
+                                  className={`${styles.cellButton} ${styles.priceCellButton}`}
+                                  onClick={() =>
+                                    openVendorPriceModal(row, vendor.vendorName, price)
                                   }
-                                />
-                                <span className={styles.formattedValue}>
-                                  {formatPrice(price.unitPrice)}
-                                </span>
+                                  aria-label={`${row.productName} ${vendor.vendorName} 仕切りを${modalModeLabel}`}
+                                >
+                                  {priceLabel}
+                                </button>
                               </td>
                             </Fragment>
                           );
