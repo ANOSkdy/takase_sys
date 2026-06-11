@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import type { ProductSheetCategory, ProductSheetGrid } from "@/services/records/sheets";
+import type { ProductSheetGrid, ProductSheetsSearchState } from "@/services/records/sheets";
 import styles from "./sheets.module.css";
 
 const numberFormat = new Intl.NumberFormat("ja-JP");
@@ -14,6 +14,7 @@ type ProblemResponse = {
 };
 type ProductFormState = {
   productName: string;
+  category: string;
   productMaker: string;
   spec: string;
   vendorName: string;
@@ -50,6 +51,13 @@ type VendorPriceHistoryState = {
   items: VendorPriceHistoryItem[];
 };
 
+type ProductSheetFilterState = {
+  q: string;
+  productName: string;
+  vendor: string;
+  pageSize: string;
+};
+
 type ApiErrorResponse = {
   error?: {
     code?: string;
@@ -59,6 +67,7 @@ type ApiErrorResponse = {
 
 const initialProductForm: ProductFormState = {
   productName: "",
+  category: "",
   productMaker: "",
   spec: "",
   vendorName: "",
@@ -106,9 +115,31 @@ function formatHistoryDate(value: string) {
   }).format(parsed);
 }
 
-function getSheetHref(category: string, index: number) {
-  if (index === 0) return "/records/sheets";
-  return `/records/sheets/${encodeURIComponent(category)}`;
+function getFilterState(
+  search: ProductSheetsSearchState | null | undefined,
+): ProductSheetFilterState {
+  return {
+    q: search?.q ?? "",
+    productName: search?.productName ?? "",
+    vendor: search?.vendor ?? "",
+    pageSize: String(search?.pageSize ?? 50),
+  };
+}
+
+function buildSheetsHref(filters: ProductSheetFilterState, page: number) {
+  const params = new URLSearchParams();
+  const setIfPresent = (key: string, value: string) => {
+    const trimmed = value.trim();
+    if (trimmed) params.set(key, trimmed);
+  };
+
+  setIfPresent("q", filters.q);
+  setIfPresent("productName", filters.productName);
+  setIfPresent("vendor", filters.vendor);
+  params.set("page", String(Math.max(1, page)));
+  params.set("pageSize", filters.pageSize);
+
+  return `/sheets?${params.toString()}`;
 }
 
 function getProblemMessage(problem: ProblemResponse | null) {
@@ -166,6 +197,7 @@ function validateVendorPriceForm(form: VendorPriceFormState) {
 function validateProductForm(form: ProductFormState) {
   const errors: ProductFormErrors = {};
   const productName = form.productName.trim();
+  const category = form.category.trim();
   const productMaker = form.productMaker.trim();
   const spec = form.spec.trim();
   const vendorName = form.vendorName.trim();
@@ -174,6 +206,8 @@ function validateProductForm(form: ProductFormState) {
 
   if (!productName) errors.productName = "品名を入力してください。";
   if (productName.length > 300) errors.productName = "品名は300文字以内で入力してください。";
+  if (!category) errors.category = "カテゴリを入力してください。";
+  if (category.length > 200) errors.category = "カテゴリは200文字以内で入力してください。";
   if (productMaker.length > 200) errors.productMaker = "メーカーは200文字以内で入力してください。";
   if (spec.length > 300) errors.spec = "規格は300文字以内で入力してください。";
   if (vendorName.length > 200) errors.vendorName = "業者名は200文字以内で入力してください。";
@@ -200,6 +234,7 @@ function validateProductForm(form: ProductFormState) {
     errors,
     values: {
       productName,
+      category,
       productMaker: productMaker || null,
       spec: spec || null,
       vendorName,
@@ -211,11 +246,11 @@ function validateProductForm(form: ProductFormState) {
 }
 
 export default function ProductSheetViewer({
-  categories,
   grid,
+  search,
 }: {
-  categories: ProductSheetCategory[];
   grid: ProductSheetGrid | null;
+  search?: ProductSheetsSearchState;
 }) {
   const router = useRouter();
   const [currentGrid, setCurrentGrid] = useState(grid);
@@ -237,6 +272,9 @@ export default function ProductSheetViewer({
     items: [],
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterForm, setFilterForm] = useState<ProductSheetFilterState>(() =>
+    getFilterState(search),
+  );
   const [visibleVendorNames, setVisibleVendorNames] = useState<Set<string>>(
     () => new Set(grid?.vendors.map((vendor) => vendor.vendorName) ?? []),
   );
@@ -318,6 +356,10 @@ export default function ProductSheetViewer({
     setErrorMessage(null);
     setSuccessMessage(null);
   }, [grid]);
+
+  useEffect(() => {
+    setFilterForm(getFilterState(search));
+  }, [search]);
 
   useEffect(() => {
     updateTopScrollbar();
@@ -453,7 +495,7 @@ export default function ProductSheetViewer({
         priceUpdatedOn: string | null;
       };
     } = {
-      category: currentGrid.category,
+      category: values.category,
       productName: values.productName,
       productMaker: values.productMaker,
       spec: values.spec,
@@ -600,22 +642,19 @@ export default function ProductSheetViewer({
         return;
       }
 
-      const response = await fetch(
-        `/api/records/sheets/${encodeURIComponent(currentGrid.category)}/cells`,
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            cells: [
-              {
-                vendorPriceId: vendorPriceModal.vendorPriceId,
-                unitPrice: values.unitPrice,
-                priceUpdatedOn: values.priceUpdatedOn,
-              },
-            ],
-          }),
-        },
-      );
+      const response = await fetch("/api/sheets/cells", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          cells: [
+            {
+              vendorPriceId: vendorPriceModal.vendorPriceId,
+              unitPrice: values.unitPrice,
+              priceUpdatedOn: values.priceUpdatedOn,
+            },
+          ],
+        }),
+      });
 
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as ProblemResponse | null;
@@ -648,31 +687,81 @@ export default function ProductSheetViewer({
     }
   }
 
+  function submitFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    router.push(buildSheetsHref(filterForm, 1));
+  }
+
+  function clearFilters() {
+    router.push("/sheets");
+  }
+
   return (
     <>
       <header className={styles.header}>
         <div className={styles.headerText}>
-          <h1>{currentGrid ? currentGrid.category : "Excel風表示"}</h1>
+          <h1>{currentGrid ? currentGrid.category : "仕切り表"}</h1>
           <p>
             {currentGrid
-              ? `${currentGrid.rows.length.toLocaleString("ja-JP")} 商品 / ${currentGrid.vendors.length.toLocaleString(
+              ? `DB全体から${(search?.total ?? currentGrid.rows.length).toLocaleString(
                   "ja-JP",
-                )} 業者のシートです。仕切りと最終更新日はセルをクリックしてモーダルで編集できます。`
-              : "カテゴリをシートのように切り替えて、業者別仕切りを横展開で確認します。"}
+                )} 商品が一致しています。仕切りと最終更新日はセルをクリックしてモーダルで編集できます。`
+              : "DB全体の品名・規格・商品キー・ベンダーから仕切り表を検索します。"}
           </p>
-        </div>
-        <div className={styles.actions}>
-          <Link href="/records/sheets/new" className={styles.primaryButton}>
-            シート追加
-          </Link>
-          <Link href="/records" className={styles.secondaryLink}>
-            仕切り表へ戻る
-          </Link>
         </div>
       </header>
 
-      {categories.length === 0 || !currentGrid ? (
-        <p className={styles.emptyState}>表示できるカテゴリがまだありません。</p>
+      <form className={styles.filterCard} onSubmit={submitFilters}>
+        <label className={styles.searchField}>
+          <span>あいまい検索</span>
+          <input
+            type="search"
+            value={filterForm.q}
+            placeholder="品名・規格・商品キー・ベンダー"
+            onChange={(event) => setFilterForm({ ...filterForm, q: event.target.value })}
+          />
+        </label>
+        <label className={styles.searchField}>
+          <span>品名</span>
+          <input
+            type="search"
+            value={filterForm.productName}
+            placeholder="product_master.product_name"
+            onChange={(event) => setFilterForm({ ...filterForm, productName: event.target.value })}
+          />
+        </label>
+        <label className={styles.searchField}>
+          <span>ベンダー</span>
+          <input
+            type="search"
+            value={filterForm.vendor}
+            placeholder="vendor_prices.vendor_name"
+            onChange={(event) => setFilterForm({ ...filterForm, vendor: event.target.value })}
+          />
+        </label>
+        <label className={styles.searchField}>
+          <span>表示件数</span>
+          <select
+            value={filterForm.pageSize}
+            onChange={(event) => setFilterForm({ ...filterForm, pageSize: event.target.value })}
+          >
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+        <div className={styles.filterActions}>
+          <button type="submit" className={styles.primaryButton}>
+            検索
+          </button>
+          <button type="button" className={styles.secondaryButton} onClick={clearFilters}>
+            クリア
+          </button>
+        </div>
+      </form>
+
+      {!currentGrid ? (
+        <p className={styles.emptyState}>表示できる商品がまだありません。</p>
       ) : (
         <>
           <div className={styles.editToolbar}>
@@ -682,16 +771,19 @@ export default function ProductSheetViewer({
               </p>
               <p className={styles.resultCount}>
                 表示中: {filteredRows.length.toLocaleString("ja-JP")} /{" "}
-                {currentGrid.rows.length.toLocaleString("ja-JP")} 商品
+                {currentGrid.rows.length.toLocaleString("ja-JP")} 商品（
+                {search?.total.toLocaleString("ja-JP") ??
+                  currentGrid.rows.length.toLocaleString("ja-JP")}
+                件中）
               </p>
             </div>
             <div className={styles.sheetControls}>
               <label className={styles.searchField}>
-                <span>このシート内を検索</span>
+                <span>表示結果内を絞り込み</span>
                 <input
                   type="search"
                   value={searchQuery}
-                  placeholder="品名・メーカー・規格で検索"
+                  placeholder="表示中の品名・メーカー・規格"
                   onChange={(event) => setSearchQuery(event.target.value)}
                 />
               </label>
@@ -761,6 +853,31 @@ export default function ProductSheetViewer({
               </button>
             </div>
           </div>
+          {search && (
+            <div className={styles.pagination}>
+              <Link
+                className={styles.secondaryLink}
+                href={buildSheetsHref(filterForm, search.page - 1)}
+                aria-disabled={search.page <= 1}
+              >
+                前へ
+              </Link>
+              <span>
+                {search.page.toLocaleString("ja-JP")} /{" "}
+                {Math.max(1, Math.ceil(search.total / search.pageSize)).toLocaleString("ja-JP")}{" "}
+                ページ
+              </span>
+              <Link
+                className={styles.secondaryLink}
+                href={buildSheetsHref(filterForm, search.page + 1)}
+                aria-disabled={
+                  search.page >= Math.max(1, Math.ceil(search.total / search.pageSize))
+                }
+              >
+                次へ
+              </Link>
+            </div>
+          )}
           {isProductFormOpen && (
             <div className={styles.modalOverlay} role="presentation">
               <section
@@ -772,7 +889,7 @@ export default function ProductSheetViewer({
                 <div className={styles.productDialogHeader}>
                   <div>
                     <h2 id="add-product-title">商品追加</h2>
-                    <p>{currentGrid.category} に1件ずつ商品を追加します。</p>
+                    <p>DB全体の仕切り表に1件ずつ商品を追加します。カテゴリを指定してください。</p>
                   </div>
                   <button
                     type="button"
@@ -809,6 +926,25 @@ export default function ProductSheetViewer({
                       {productFormErrors.productName && (
                         <small id="product-name-error" className={styles.fieldError}>
                           {productFormErrors.productName}
+                        </small>
+                      )}
+                    </label>
+                    <label className={styles.formField}>
+                      <span>
+                        カテゴリ <strong aria-hidden="true">*</strong>
+                      </span>
+                      <input
+                        type="text"
+                        value={productForm.category}
+                        maxLength={200}
+                        required
+                        aria-invalid={Boolean(productFormErrors.category)}
+                        aria-describedby={productFormErrors.category ? "category-error" : undefined}
+                        onChange={(event) => updateProductFormField("category", event.target.value)}
+                      />
+                      {productFormErrors.category && (
+                        <small id="category-error" className={styles.fieldError}>
+                          {productFormErrors.category}
                         </small>
                       )}
                     </label>
@@ -1184,27 +1320,6 @@ export default function ProductSheetViewer({
             </>
           )}
         </>
-      )}
-
-      {categories.length > 0 && (
-        <nav className={styles.sheetTabs} aria-label="カテゴリシート切り替え">
-          {categories.map((item, index) => {
-            const active = item.category === currentGrid?.category;
-            return (
-              <Link
-                key={item.category}
-                href={getSheetHref(item.category, index)}
-                scroll={false}
-                className={`${styles.sheetTab} ${active ? styles.sheetTabActive : ""}`}
-                aria-current={active ? "page" : undefined}
-                aria-label={`${item.category}（${item.productCount.toLocaleString("ja-JP")}商品）`}
-                title={`${item.category}（${item.productCount.toLocaleString("ja-JP")}商品）`}
-              >
-                <span>{item.category}</span>
-              </Link>
-            );
-          })}
-        </nav>
       )}
     </>
   );
