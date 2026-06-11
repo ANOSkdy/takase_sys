@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import type { ProductSheetCategory, ProductSheetGrid } from "@/services/records/sheets";
 import styles from "./sheets.module.css";
 
@@ -78,6 +86,48 @@ export default function ProductSheetViewer({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const topSpacerRef = useRef<HTMLDivElement>(null);
+  const syncSourceRef = useRef<"top" | "table" | null>(null);
+
+  const updateTopScrollbar = useCallback(() => {
+    const topScroll = topScrollRef.current;
+    const tableScroll = tableScrollRef.current;
+    const topSpacer = topSpacerRef.current;
+    if (!topScroll || !tableScroll || !topSpacer) return;
+
+    topSpacer.style.width = `${tableScroll.scrollWidth}px`;
+    topScroll.scrollLeft = tableScroll.scrollLeft;
+    setHasHorizontalOverflow(tableScroll.scrollWidth > tableScroll.clientWidth + 1);
+  }, []);
+
+  function clearSyncSource(source: "top" | "table") {
+    requestAnimationFrame(() => {
+      if (syncSourceRef.current === source) syncSourceRef.current = null;
+    });
+  }
+
+  function syncFromTop() {
+    const topScroll = topScrollRef.current;
+    const tableScroll = tableScrollRef.current;
+    if (!topScroll || !tableScroll || syncSourceRef.current === "table") return;
+
+    syncSourceRef.current = "top";
+    tableScroll.scrollLeft = topScroll.scrollLeft;
+    clearSyncSource("top");
+  }
+
+  function syncFromTable() {
+    const topScroll = topScrollRef.current;
+    const tableScroll = tableScrollRef.current;
+    if (!topScroll || !tableScroll || syncSourceRef.current === "top") return;
+
+    syncSourceRef.current = "table";
+    topScroll.scrollLeft = tableScroll.scrollLeft;
+    clearSyncSource("table");
+  }
 
   useEffect(() => {
     setCurrentGrid(grid);
@@ -86,6 +136,25 @@ export default function ProductSheetViewer({
     setErrorMessage(null);
     setSuccessMessage(null);
   }, [grid]);
+
+  useEffect(() => {
+    updateTopScrollbar();
+
+    const tableScroll = tableScrollRef.current;
+    if (!tableScroll) return;
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateTopScrollbar);
+      return () => window.removeEventListener("resize", updateTopScrollbar);
+    }
+
+    const resizeObserver = new ResizeObserver(updateTopScrollbar);
+    resizeObserver.observe(tableScroll);
+    const table = tableScroll.querySelector("table");
+    if (table) resizeObserver.observe(table);
+
+    return () => resizeObserver.disconnect();
+  }, [currentGrid, updateTopScrollbar]);
 
   const dirtyPayload = useMemo(() => {
     if (!currentGrid) return [];
@@ -259,9 +328,22 @@ export default function ProductSheetViewer({
           {errorMessage && <p className={styles.errorMessage}>{errorMessage}</p>}
           {successMessage && <p className={styles.successMessage}>{successMessage}</p>}
           <div
+            ref={topScrollRef}
+            className={styles.topScrollBar}
+            data-visible={hasHorizontalOverflow}
+            role="region"
+            aria-label="横スクロール"
+            tabIndex={0}
+            onScroll={syncFromTop}
+          >
+            <div ref={topSpacerRef} className={styles.topScrollSpacer} />
+          </div>
+          <div
+            ref={tableScrollRef}
             className={styles.gridWrap}
             role="region"
             aria-label={`${currentGrid.category}の仕切り表`}
+            onScroll={syncFromTable}
           >
             <table className={styles.sheetTable}>
               <thead>
