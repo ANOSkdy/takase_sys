@@ -491,3 +491,58 @@
     flex: 1 1 160px;
   }
 }
+
+.sheetFormCard {
+  display: grid;
+  gap: var(--space-5);
+  width: min(100%, 960px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.formSection {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.formSectionHeader {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.formSectionHeader h2,
+.formSectionHeader p {
+  margin: 0;
+}
+
+.formSectionHeader p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.formActionsStatic {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-4);
+}
+
+@media (max-width: 720px) {
+  .sheetFormCard {
+    padding: var(--space-4);
+  }
+
+  .formActionsStatic {
+    justify-content: stretch;
+  }
+
+  .formActionsStatic a,
+  .formActionsStatic button {
+    flex: 1 1 160px;
+  }
+}
