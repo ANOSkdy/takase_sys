@@ -12,9 +12,12 @@ type ApiProblem = {
   };
 };
 
-function formatYen(n: number) {
-  if (!Number.isFinite(n)) return "-";
+function formatYen(n: number | null) {
+  if (n == null || !Number.isFinite(n)) return "未登録";
   return new Intl.NumberFormat("ja-JP").format(n);
+}
+function canEditRecord(record: RecordRow) {
+  return !record.recordId.startsWith("product:");
 }
 function formatDate(iso: string | null) {
   if (!iso) return "-";
@@ -90,7 +93,9 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
 
   const editId = sp.get("edit");
   const isNewMode = sp.get("new") !== null;
-  const activeRecord = editId ? (items.find((item) => item.recordId === editId) ?? null) : null;
+  const activeRecord = editId
+    ? (items.find((item) => item.recordId === editId && canEditRecord(item)) ?? null)
+    : null;
 
   const page = Number(sp.get("page") ?? "1");
   const pageSize = Number(sp.get("pageSize") ?? form.pageSize ?? "50");
@@ -132,6 +137,7 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   };
 
   const openEdit = (item: RecordRow, rowElement: HTMLElement) => {
+    if (!canEditRecord(item)) return;
     setRowRestoreTarget(rowElement);
     router.push(`/records?${withParam(sp, { edit: item.recordId })}`);
   };
@@ -343,29 +349,34 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
             </tr>
           </thead>
           <tbody>
-            {items.map((r) => (
-              <tr
-                key={r.recordId}
-                tabIndex={0}
-                role="button"
-                onClick={(e) => openEdit(r, e.currentTarget)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    openEdit(r, e.currentTarget);
-                  }
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <Td>{r.productName}</Td>
-                <Td muted>{r.spec ?? "-"}</Td>
-                <Td muted>{r.productMaker ?? ""}</Td>
-                <Td align="right">{formatYen(r.unitPrice)}</Td>
-                <Td>{r.vendorName}</Td>
-                <Td>{formatDate(r.lastUpdatedOn)}</Td>
-                <Td muted>{r.category ?? "-"}</Td>
-              </tr>
-            ))}
+            {items.map((r) => {
+              const editable = canEditRecord(r);
+
+              return (
+                <tr
+                  key={r.recordId}
+                  tabIndex={editable ? 0 : undefined}
+                  role={editable ? "button" : undefined}
+                  onClick={(e) => openEdit(r, e.currentTarget)}
+                  onKeyDown={(e) => {
+                    if (!editable) return;
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openEdit(r, e.currentTarget);
+                    }
+                  }}
+                  style={{ cursor: editable ? "pointer" : "default" }}
+                >
+                  <Td>{r.productName}</Td>
+                  <Td muted>{r.spec ?? "-"}</Td>
+                  <Td muted>{r.productMaker ?? ""}</Td>
+                  <Td align="right">{formatYen(r.unitPrice)}</Td>
+                  <Td muted={!r.vendorName}>{r.vendorName ?? "未登録"}</Td>
+                  <Td>{formatDate(r.lastUpdatedOn)}</Td>
+                  <Td muted>{r.category ?? "-"}</Td>
+                </tr>
+              );
+            })}
             {items.length === 0 && (
               <tr>
                 <td colSpan={7} style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}>
@@ -419,8 +430,8 @@ function RecordEditModal({
     productMaker: record.productMaker ?? "",
     spec: record.spec ?? "",
     category: record.category ?? "",
-    vendorName: record.vendorName,
-    unitPrice: String(record.unitPrice),
+    vendorName: record.vendorName ?? "",
+    unitPrice: record.unitPrice == null ? "" : String(record.unitPrice),
     priceUpdatedOn: record.priceUpdatedOn ?? "",
   });
   const [busy, setBusy] = useState(false);
@@ -450,8 +461,8 @@ function RecordEditModal({
           productMaker: latest.productMaker ?? "",
           spec: latest.spec ?? "",
           category: latest.category ?? "",
-          vendorName: latest.vendorName,
-          unitPrice: String(latest.unitPrice),
+          vendorName: latest.vendorName ?? "",
+          unitPrice: latest.unitPrice == null ? "" : String(latest.unitPrice),
           priceUpdatedOn: latest.priceUpdatedOn ?? "",
         });
       } catch {
