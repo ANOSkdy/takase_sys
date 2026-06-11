@@ -89,8 +89,13 @@ export const productIdParamSchema = z.object({
   productId: z.string().uuid(),
 });
 
+export const vendorPriceHistoryQuerySchema = z.object({
+  vendorName: trimRequiredString(200, "vendorName"),
+});
+
 export type CreateRecordProductInput = z.infer<typeof createRecordProductSchema>;
 export type AddVendorPriceToProductInput = z.infer<typeof addVendorPriceToProductSchema>;
+export type VendorPriceHistoryQuery = z.infer<typeof vendorPriceHistoryQuerySchema>;
 
 export type CreateRecordProductResult = {
   productId: string;
@@ -104,6 +109,14 @@ export type AddVendorPriceToProductResult = {
   productId: string;
   vendorPriceId: string;
   created: true;
+};
+
+export type VendorPriceHistoryItem = {
+  updatedAt: string;
+  beforeValue: string | null;
+  afterValue: string | null;
+  sourceType: string | null;
+  updatedBy: string | null;
 };
 
 export class ProductAlreadyExistsError extends Error {
@@ -307,4 +320,44 @@ export async function addVendorPriceToProduct(
     vendorPriceId,
     created: true,
   };
+}
+
+export async function listRecentVendorPriceHistory(
+  productId: string,
+  input: VendorPriceHistoryQuery,
+): Promise<VendorPriceHistoryItem[]> {
+  const sql = getSql();
+  const rows = await sql<
+    {
+      updatedAt: Date | string;
+      beforeValue: string | null;
+      afterValue: string | null;
+      sourceType: string | null;
+      updatedBy: string | null;
+    }[]
+  >`
+    SELECT
+      updated_at AS "updatedAt",
+      before_value AS "beforeValue",
+      after_value AS "afterValue",
+      source_type AS "sourceType",
+      updated_by AS "updatedBy"
+    FROM update_history
+    WHERE product_id = ${productId}
+      AND vendor_name = ${input.vendorName}
+      AND field_name = 'vendor_price'
+    ORDER BY updated_at DESC
+    LIMIT 10
+  `;
+
+  return rows.map((row) => ({
+    updatedAt:
+      row.updatedAt instanceof Date
+        ? row.updatedAt.toISOString()
+        : new Date(row.updatedAt).toISOString(),
+    beforeValue: row.beforeValue,
+    afterValue: row.afterValue,
+    sourceType: row.sourceType,
+    updatedBy: row.updatedBy,
+  }));
 }
