@@ -38,9 +38,14 @@ export async function POST(req: Request) {
     return NextResponse.json(created, { status: 201, headers: noStoreHeaders });
   } catch (error) {
     if (error instanceof ProductAlreadyExistsError) {
-      return errorResponse(409, "PRODUCT_ALREADY_EXISTS", "同じ品名・規格の商品が既に存在します。", {
-        productKey: error.productKey,
-      });
+      return errorResponse(
+        409,
+        "PRODUCT_ALREADY_EXISTS",
+        "同じ品名・規格の商品が既に存在します。",
+        {
+          productKey: error.productKey,
+        },
+      );
     }
 
     console.error("[records:products] product creation failed", error);
