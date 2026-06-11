@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { ProductSheetCategory, ProductSheetGrid } from "@/services/records/sheets";
 import styles from "./sheets.module.css";
 
@@ -38,6 +38,17 @@ type VendorPriceFormState = {
   priceUpdatedOn: string;
 };
 type VendorPriceFormErrors = Partial<Record<keyof VendorPriceFormState | "form", string>>;
+type VendorPriceHistoryItem = {
+  updatedAt: string;
+  beforeValue: string | null;
+  afterValue: string | null;
+  sourceType: string | null;
+  updatedBy: string | null;
+};
+type VendorPriceHistoryState = {
+  status: "idle" | "loading" | "success" | "error";
+  items: VendorPriceHistoryItem[];
+};
 
 type ApiErrorResponse = {
   error?: {
@@ -67,11 +78,32 @@ function toDateInputValue(value: string | Date | null | undefined) {
   return value.toISOString().slice(0, 10);
 }
 
+function normalizeSearchText(value: string | null | undefined) {
+  return (value ?? "").toLocaleLowerCase("ja-JP");
+}
+
 function formatPrice(value: string | number | null | undefined) {
   if (value == null) return "-";
   const numeric = Number(value);
   if (Number.isNaN(numeric)) return String(value);
   return numberFormat.format(numeric);
+}
+
+function formatHistoryValue(value: string | null | undefined) {
+  if (!value) return "未登録";
+  return formatPrice(value);
+}
+
+function formatHistoryDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(parsed);
 }
 
 function getSheetHref(category: string, index: number) {
@@ -200,10 +232,22 @@ export default function ProductSheetViewer({
     priceUpdatedOn: "",
   });
   const [vendorPriceFormErrors, setVendorPriceFormErrors] = useState<VendorPriceFormErrors>({});
+  const [vendorPriceHistory, setVendorPriceHistory] = useState<VendorPriceHistoryState>({
+    status: "idle",
+    items: [],
+  });
+  const [searchQuery, setSearchQuery] = useState("");
+  const [visibleVendorNames, setVisibleVendorNames] = useState<Set<string>>(
+    () => new Set(grid?.vendors.map((vendor) => vendor.vendorName) ?? []),
+  );
+  const [isVendorPanelOpen, setIsVendorPanelOpen] = useState(false);
+  const [jumpedVendorName, setJumpedVendorName] = useState<string | null>(null);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const topSpacerRef = useRef<HTMLDivElement>(null);
+  const vendorHeaderRefs = useRef(new Map<string, HTMLTableCellElement>());
+  const jumpHighlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncSourceRef = useRef<"top" | "table" | null>(null);
 
   const updateTopScrollbar = useCallback(() => {
@@ -243,8 +287,34 @@ export default function ProductSheetViewer({
     clearSyncSource("table");
   }
 
+  const visibleVendors = useMemo(() => {
+    if (!currentGrid) return [];
+    return currentGrid.vendors.filter((vendor) => visibleVendorNames.has(vendor.vendorName));
+  }, [currentGrid, visibleVendorNames]);
+
+  const filteredRows = useMemo(() => {
+    if (!currentGrid) return [];
+    const tokens = searchQuery
+      .trim()
+      .split(/[\s　]+/)
+      .filter(Boolean)
+      .map((token) => token.toLocaleLowerCase("ja-JP"));
+
+    if (tokens.length === 0) return currentGrid.rows;
+
+    return currentGrid.rows.filter((row) => {
+      const searchable = normalizeSearchText(
+        `${row.productName} ${row.productMaker ?? ""} ${row.spec ?? ""}`,
+      );
+      return tokens.every((token) => searchable.includes(token));
+    });
+  }, [currentGrid, searchQuery]);
+
   useEffect(() => {
     setCurrentGrid(grid);
+    setVisibleVendorNames(new Set(grid?.vendors.map((vendor) => vendor.vendorName) ?? []));
+    setIsVendorPanelOpen(false);
+    setJumpedVendorName(null);
     setErrorMessage(null);
     setSuccessMessage(null);
   }, [grid]);
@@ -266,7 +336,75 @@ export default function ProductSheetViewer({
     if (table) resizeObserver.observe(table);
 
     return () => resizeObserver.disconnect();
-  }, [currentGrid, updateTopScrollbar]);
+  }, [currentGrid, visibleVendors, filteredRows, updateTopScrollbar]);
+
+  useEffect(() => {
+    if (!vendorPriceModal || vendorPriceModal.mode !== "edit") {
+      setVendorPriceHistory({ status: "idle", items: [] });
+      return;
+    }
+
+    const controller = new AbortController();
+    setVendorPriceHistory({ status: "loading", items: [] });
+
+    const params = new URLSearchParams({ vendorName: vendorPriceModal.vendorName });
+    fetch(
+      `/api/records/products/${encodeURIComponent(
+        vendorPriceModal.productId,
+      )}/vendor-prices/history?${params.toString()}`,
+      { signal: controller.signal },
+    )
+      .then(async (response) => {
+        if (!response.ok) throw new Error("history request failed");
+        return (await response.json()) as { items: VendorPriceHistoryItem[] };
+      })
+      .then((data) => {
+        setVendorPriceHistory({ status: "success", items: data.items });
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setVendorPriceHistory({ status: "error", items: [] });
+      });
+
+    return () => controller.abort();
+  }, [vendorPriceModal]);
+
+  useEffect(() => {
+    return () => {
+      if (jumpHighlightTimeoutRef.current) clearTimeout(jumpHighlightTimeoutRef.current);
+    };
+  }, []);
+
+  function toggleVendorVisibility(vendorName: string) {
+    setVisibleVendorNames((current) => {
+      const next = new Set(current);
+      if (next.has(vendorName)) {
+        if (next.size <= 1) return current;
+        next.delete(vendorName);
+      } else {
+        next.add(vendorName);
+      }
+      return next;
+    });
+  }
+
+  function showAllVendors() {
+    if (!currentGrid) return;
+    setVisibleVendorNames(new Set(currentGrid.vendors.map((vendor) => vendor.vendorName)));
+  }
+
+  function jumpToVendor(vendorName: string) {
+    const tableScroll = tableScrollRef.current;
+    const header = vendorHeaderRefs.current.get(vendorName);
+    if (!tableScroll || !header) return;
+
+    const targetLeft = Math.max(header.offsetLeft - 12, 0);
+    tableScroll.scrollTo({ left: targetLeft, behavior: "smooth" });
+    if (topScrollRef.current) topScrollRef.current.scrollLeft = targetLeft;
+    setJumpedVendorName(vendorName);
+    if (jumpHighlightTimeoutRef.current) clearTimeout(jumpHighlightTimeoutRef.current);
+    jumpHighlightTimeoutRef.current = setTimeout(() => setJumpedVendorName(null), 1400);
+  }
 
   function openProductForm() {
     setProductFormErrors({});
@@ -385,6 +523,7 @@ export default function ProductSheetViewer({
       priceUpdatedOn: toDateInputValue(price?.priceUpdatedOn),
     });
     setVendorPriceFormErrors({});
+    setVendorPriceHistory({ status: price ? "loading" : "idle", items: [] });
     setErrorMessage(null);
     setSuccessMessage(null);
   }
@@ -394,6 +533,7 @@ export default function ProductSheetViewer({
     setVendorPriceModal(null);
     setVendorPriceForm({ unitPrice: "", priceUpdatedOn: "" });
     setVendorPriceFormErrors({});
+    setVendorPriceHistory({ status: "idle", items: [] });
   }
 
   function updateVendorPriceFormField(field: keyof VendorPriceFormState, value: string) {
@@ -536,8 +676,81 @@ export default function ProductSheetViewer({
       ) : (
         <>
           <div className={styles.editToolbar}>
-            <p className={styles.meta}>価格セルまたは日付セルをクリックして追加・編集できます。</p>
-            <div className={styles.editActions}>
+            <div className={styles.toolbarIntro}>
+              <p className={styles.meta}>
+                価格セルまたは日付セルをクリックして追加・編集できます。
+              </p>
+              <p className={styles.resultCount}>
+                表示中: {filteredRows.length.toLocaleString("ja-JP")} /{" "}
+                {currentGrid.rows.length.toLocaleString("ja-JP")} 商品
+              </p>
+            </div>
+            <div className={styles.sheetControls}>
+              <label className={styles.searchField}>
+                <span>このシート内を検索</span>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  placeholder="品名・メーカー・規格で検索"
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+              </label>
+              <div className={styles.vendorControl}>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  aria-expanded={isVendorPanelOpen}
+                  onClick={() => setIsVendorPanelOpen((current) => !current)}
+                >
+                  表示業者
+                </button>
+                {isVendorPanelOpen && (
+                  <div className={styles.vendorPanel}>
+                    <div className={styles.vendorPanelHeader}>
+                      <strong>表示業者</strong>
+                      <button type="button" className={styles.textButton} onClick={showAllVendors}>
+                        すべて表示
+                      </button>
+                    </div>
+                    <div className={styles.vendorCheckboxList}>
+                      {currentGrid.vendors.map((vendor) => {
+                        const checked = visibleVendorNames.has(vendor.vendorName);
+                        return (
+                          <label key={vendor.vendorName} className={styles.vendorCheckbox}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={checked && visibleVendorNames.size <= 1}
+                              onChange={() => toggleVendorVisibility(vendor.vendorName)}
+                            />
+                            <span>{vendor.vendorName}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className={styles.vendorPanelHint}>最後の1業者は非表示にできません。</p>
+                  </div>
+                )}
+              </div>
+              <label className={styles.jumpField}>
+                <span>業者へ移動</span>
+                <select
+                  defaultValue=""
+                  aria-label="業者へ移動"
+                  onChange={(event) => {
+                    const vendorName = event.target.value;
+                    if (vendorName) jumpToVendor(vendorName);
+                    event.target.value = "";
+                  }}
+                >
+                  <option value="">業者を選択</option>
+                  {visibleVendors.map((vendor) => (
+                    <option key={vendor.vendorName} value={vendor.vendorName}>
+                      {vendor.vendorName}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 className={styles.secondaryButton}
@@ -791,6 +1004,36 @@ export default function ProductSheetViewer({
                       )}
                     </label>
                   </div>
+                  <section
+                    className={styles.historyBlock}
+                    aria-labelledby="vendor-price-history-title"
+                  >
+                    <h3 id="vendor-price-history-title">最近の変更履歴</h3>
+                    {vendorPriceModal.mode === "create" ? (
+                      <p>まだ履歴はありません。</p>
+                    ) : vendorPriceHistory.status === "loading" ? (
+                      <p>履歴を読み込み中...</p>
+                    ) : vendorPriceHistory.status === "error" ? (
+                      <p>履歴を取得できませんでした。</p>
+                    ) : vendorPriceHistory.items.length === 0 ? (
+                      <p>変更履歴はありません。</p>
+                    ) : (
+                      <ul className={styles.historyList}>
+                        {vendorPriceHistory.items.map((item) => (
+                          <li key={`${item.updatedAt}-${item.beforeValue}-${item.afterValue}`}>
+                            <time dateTime={item.updatedAt}>
+                              {formatHistoryDate(item.updatedAt)}
+                            </time>
+                            <span>
+                              {formatHistoryValue(item.beforeValue)} →{" "}
+                              {formatHistoryValue(item.afterValue)}
+                            </span>
+                            {item.sourceType && <small>{item.sourceType}</small>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
                   <div className={styles.formActions}>
                     <button
                       type="button"
@@ -852,59 +1095,89 @@ export default function ProductSheetViewer({
                       <th className={styles.stickySpec} scope="col">
                         規格
                       </th>
-                      {currentGrid.vendors.map((vendor) => (
+                      {visibleVendors.map((vendor) => (
                         <Fragment key={vendor.vendorName}>
-                          <th scope="col">{vendor.vendorName} 最終更新日</th>
-                          <th scope="col">{vendor.vendorName} 仕切り</th>
+                          <th
+                            ref={(element) => {
+                              if (element) vendorHeaderRefs.current.set(vendor.vendorName, element);
+                              else vendorHeaderRefs.current.delete(vendor.vendorName);
+                            }}
+                            scope="col"
+                            className={
+                              jumpedVendorName === vendor.vendorName
+                                ? styles.vendorJumpHighlight
+                                : undefined
+                            }
+                          >
+                            {vendor.vendorName} 最終更新日
+                          </th>
+                          <th
+                            scope="col"
+                            className={
+                              jumpedVendorName === vendor.vendorName
+                                ? styles.vendorJumpHighlight
+                                : undefined
+                            }
+                          >
+                            {vendor.vendorName} 仕切り
+                          </th>
                         </Fragment>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {currentGrid.rows.map((row) => (
-                      <tr key={row.productId}>
-                        <td className={styles.stickyName}>{row.productName}</td>
-                        <td className={styles.stickyMaker}>{row.productMaker ?? "-"}</td>
-                        <td className={styles.stickySpec}>{row.spec ?? "-"}</td>
-                        {currentGrid.vendors.map((vendor) => {
-                          const price = row.prices[vendor.vendorName];
-                          const modalModeLabel = price ? "編集" : "追加";
-                          const dateLabel = price
-                            ? toDateInputValue(price.priceUpdatedOn) || "-"
-                            : "+追加";
-                          const priceLabel = price ? formatPrice(price.unitPrice) : "+追加";
-
-                          return (
-                            <Fragment key={`${row.productId}-${vendor.vendorName}`}>
-                              <td>
-                                <button
-                                  type="button"
-                                  className={styles.cellButton}
-                                  onClick={() =>
-                                    openVendorPriceModal(row, vendor.vendorName, price)
-                                  }
-                                  aria-label={`${row.productName} ${vendor.vendorName} 最終更新日を${modalModeLabel}`}
-                                >
-                                  {dateLabel}
-                                </button>
-                              </td>
-                              <td className={styles.priceCell}>
-                                <button
-                                  type="button"
-                                  className={`${styles.cellButton} ${styles.priceCellButton}`}
-                                  onClick={() =>
-                                    openVendorPriceModal(row, vendor.vendorName, price)
-                                  }
-                                  aria-label={`${row.productName} ${vendor.vendorName} 仕切りを${modalModeLabel}`}
-                                >
-                                  {priceLabel}
-                                </button>
-                              </td>
-                            </Fragment>
-                          );
-                        })}
+                    {filteredRows.length === 0 ? (
+                      <tr>
+                        <td className={styles.noResultCell} colSpan={3 + visibleVendors.length * 2}>
+                          条件に一致する商品がありません。
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      filteredRows.map((row) => (
+                        <tr key={row.productId}>
+                          <td className={styles.stickyName}>{row.productName}</td>
+                          <td className={styles.stickyMaker}>{row.productMaker ?? "-"}</td>
+                          <td className={styles.stickySpec}>{row.spec ?? "-"}</td>
+                          {visibleVendors.map((vendor) => {
+                            const price = row.prices[vendor.vendorName];
+                            const modalModeLabel = price ? "編集" : "追加";
+                            const dateLabel = price
+                              ? toDateInputValue(price.priceUpdatedOn) || "-"
+                              : "+追加";
+                            const priceLabel = price ? formatPrice(price.unitPrice) : "+追加";
+
+                            return (
+                              <Fragment key={`${row.productId}-${vendor.vendorName}`}>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className={styles.cellButton}
+                                    onClick={() =>
+                                      openVendorPriceModal(row, vendor.vendorName, price)
+                                    }
+                                    aria-label={`${row.productName} ${vendor.vendorName} 最終更新日を${modalModeLabel}`}
+                                  >
+                                    {dateLabel}
+                                  </button>
+                                </td>
+                                <td className={styles.priceCell}>
+                                  <button
+                                    type="button"
+                                    className={`${styles.cellButton} ${styles.priceCellButton}`}
+                                    onClick={() =>
+                                      openVendorPriceModal(row, vendor.vendorName, price)
+                                    }
+                                    aria-label={`${row.productName} ${vendor.vendorName} 仕切りを${modalModeLabel}`}
+                                  >
+                                    {priceLabel}
+                                  </button>
+                                </td>
+                              </Fragment>
+                            );
+                          })}
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
