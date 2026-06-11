@@ -256,7 +256,12 @@ export async function createRecordProduct(
 
     const createdProduct = insertedProducts[0];
     const vendorPriceId = input.vendorPrice
-      ? await insertVendorPriceWithHistory(trx, createdProduct.productId, input.vendorPrice, batchId)
+      ? await insertVendorPriceWithHistory(
+          trx,
+          createdProduct.productId,
+          input.vendorPrice,
+          batchId,
+        )
       : null;
 
     return {

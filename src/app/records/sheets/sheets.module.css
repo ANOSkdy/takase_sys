@@ -295,3 +295,199 @@
   background: color-mix(in srgb, #16a34a 10%, var(--surface));
   color: #166534;
 }
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 24px 16px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.productDialog {
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.productDialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-6) var(--space-6) var(--space-4);
+}
+
+.productDialogHeader h2,
+.productDialogHeader p {
+  margin: 0;
+}
+
+.productDialogHeader h2 {
+  line-height: 1.25;
+}
+
+.productDialogHeader p {
+  margin-top: var(--space-2);
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-base) 72%, var(--surface));
+  color: var(--foreground);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.productForm {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--space-4);
+}
+
+.productForm > .formGrid .formField:first-child {
+  grid-column: span 2;
+}
+
+.formField {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  font-weight: 700;
+}
+
+.formField input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 400;
+}
+
+.formField input:focus {
+  border-color: var(--color-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.formField input[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.fieldError {
+  color: #991b1b;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.vendorFieldset {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--border));
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--surface));
+}
+
+.vendorFieldset legend {
+  padding: 0 var(--space-2);
+  font-weight: 700;
+}
+
+.vendorFieldset .formField:first-child {
+  grid-column: auto;
+}
+
+.formActions {
+  position: sticky;
+  bottom: calc(-1 * var(--space-6));
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  margin: var(--space-1) calc(-1 * var(--space-6)) calc(-1 * var(--space-6));
+  padding: var(--space-4) var(--space-6);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
+@media (max-width: 720px) {
+  .modalOverlay {
+    align-items: end;
+    padding: var(--space-2);
+  }
+
+  .productDialog {
+    width: min(100%, calc(100vw - var(--space-4)));
+    max-height: calc(100dvh - var(--space-4));
+  }
+
+  .productDialogHeader {
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .productForm {
+    gap: var(--space-4);
+    padding: var(--space-4);
+  }
+
+  .formGrid,
+  .productForm > .formGrid .formField:first-child {
+    grid-column: auto;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .vendorFieldset {
+    padding: var(--space-3);
+  }
+
+  .formActions {
+    bottom: calc(-1 * var(--space-4));
+    justify-content: stretch;
+    margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .formActions button {
+    flex: 1 1 160px;
+  }
+}
