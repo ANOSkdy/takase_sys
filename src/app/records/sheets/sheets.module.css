@@ -295,3 +295,154 @@
   background: color-mix(in srgb, #16a34a 10%, var(--surface));
   color: #166534;
 }
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.productDialog {
+  width: min(720px, 100%);
+  max-height: calc(100vh - var(--space-6) * 2);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.productDialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.productDialogHeader h2,
+.productDialogHeader p {
+  margin: 0;
+}
+
+.productDialogHeader p {
+  margin-top: var(--space-1);
+  color: var(--muted);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.productForm {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.formField {
+  display: grid;
+  gap: var(--space-1);
+  font-weight: 700;
+}
+
+.formField input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 400;
+}
+
+.formField input:focus {
+  border-color: var(--color-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.formField input[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.fieldError {
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.vendorFieldset {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+}
+
+.vendorFieldset legend {
+  padding: 0 var(--space-1);
+  font-weight: 700;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .modalOverlay {
+    align-items: end;
+    padding: var(--space-2);
+  }
+
+  .productDialog {
+    max-height: calc(100vh - var(--space-4));
+    padding: var(--space-4);
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .formActions {
+    justify-content: stretch;
+  }
+
+  .formActions button {
+    flex: 1 1 160px;
+  }
+}
