@@ -30,6 +30,8 @@ type VendorPriceModalState = {
   spec: string | null;
   vendorName: string;
   vendorPriceId: string | null;
+  unitPrice: string | number | null;
+  priceUpdatedOn: string | Date | null;
 };
 type VendorPriceFormState = {
   unitPrice: string;
@@ -375,6 +377,8 @@ export default function ProductSheetViewer({
       spec: row.spec,
       vendorName,
       vendorPriceId: price?.vendorPriceId ?? null,
+      unitPrice: price?.unitPrice ?? null,
+      priceUpdatedOn: price?.priceUpdatedOn ?? null,
     });
     setVendorPriceForm({
       unitPrice: price ? String(price.unitPrice) : "",
@@ -865,8 +869,10 @@ export default function ProductSheetViewer({
                         {currentGrid.vendors.map((vendor) => {
                           const price = row.prices[vendor.vendorName];
                           const modalModeLabel = price ? "編集" : "追加";
-                          const dateLabel = toDateInputValue(price?.priceUpdatedOn) || "-";
-                          const priceLabel = price ? formatPrice(price.unitPrice) : "-";
+                          const dateLabel = price
+                            ? toDateInputValue(price.priceUpdatedOn) || "-"
+                            : "+追加";
+                          const priceLabel = price ? formatPrice(price.unitPrice) : "+追加";
 
                           return (
                             <Fragment key={`${row.productId}-${vendor.vendorName}`}>
