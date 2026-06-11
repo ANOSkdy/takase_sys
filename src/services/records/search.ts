@@ -52,8 +52,8 @@ export type RecordRow = {
   spec: string | null;
   productMaker: string | null;
   category: string | null;
-  vendorName: string;
-  unitPrice: number;
+  vendorName: string | null;
+  unitPrice: number | null;
   priceUpdatedOn: string | null;
   lastUpdatedOn: string | null; // YYYY-MM-DD
 };
@@ -75,8 +75,8 @@ type DbRow = {
   spec: string | null;
   productMaker: string | null;
   category: string | null;
-  vendorName: string;
-  unitPrice: string | number;
+  vendorName: string | null;
+  unitPrice: string | number | null;
   priceUpdatedOn: string | Date | null;
   lastUpdatedOn: string | Date | null;
   totalCount: string | number;
@@ -129,10 +129,16 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
   if (params.priceMax != null) add(`vp.unit_price <= $$`, params.priceMax);
 
   if (params.updatedFrom) {
-    add(`COALESCE(vp.price_updated_on, vp.updated_at::date) >= $$::date`, params.updatedFrom);
+    add(
+      `COALESCE(vp.price_updated_on, vp.updated_at::date, pm.last_updated_at::date) >= $$::date`,
+      params.updatedFrom,
+    );
   }
   if (params.updatedTo) {
-    add(`COALESCE(vp.price_updated_on, vp.updated_at::date) <= $$::date`, params.updatedTo);
+    add(
+      `COALESCE(vp.price_updated_on, vp.updated_at::date, pm.last_updated_at::date) <= $$::date`,
+      params.updatedTo,
+    );
   }
 
   if (params.q) {
@@ -163,7 +169,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
 
   const sql = `
     SELECT
-      vp.vendor_price_id AS "recordId",
+      COALESCE(vp.vendor_price_id::text, 'product:' || pm.product_id::text) AS "recordId",
       pm.product_id AS "productId",
       pm.product_name AS "productName",
       pm.spec AS "spec",
@@ -172,14 +178,14 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
       vp.vendor_name AS "vendorName",
       vp.unit_price AS "unitPrice",
       vp.price_updated_on AS "priceUpdatedOn",
-      COALESCE(vp.price_updated_on, vp.updated_at::date) AS "lastUpdatedOn",
+      COALESCE(vp.price_updated_on, vp.updated_at::date, pm.last_updated_at::date) AS "lastUpdatedOn",
       COUNT(*) OVER() AS "totalCount"
-    FROM vendor_prices vp
-    JOIN product_master pm
-      ON pm.product_id = vp.product_id
+    FROM product_master pm
+    LEFT JOIN vendor_prices vp
+      ON vp.product_id = pm.product_id
     ${whereSql}
     ORDER BY
-      COALESCE(vp.price_updated_on, vp.updated_at::date) DESC NULLS LAST,
+      COALESCE(vp.price_updated_on, vp.updated_at::date, pm.last_updated_at::date) DESC NULLS LAST,
       pm.product_name ASC
     LIMIT ${limitPh}
     OFFSET ${offsetPh}
@@ -205,8 +211,8 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     spec: r.spec ?? null,
     productMaker: r.productMaker ?? null,
     category: r.category ?? null,
-    vendorName: r.vendorName,
-    unitPrice: Number(r.unitPrice),
+    vendorName: r.vendorName ?? null,
+    unitPrice: r.unitPrice == null ? null : Number(r.unitPrice),
     priceUpdatedOn: toIsoDate(r.priceUpdatedOn),
     lastUpdatedOn: toIsoDate(r.lastUpdatedOn),
   }));
