@@ -675,17 +675,37 @@ export default function ProductSheetViewer({
         <p className={styles.emptyState}>表示できるカテゴリがまだありません。</p>
       ) : (
         <>
-          <div className={styles.editToolbar}>
+          <section className={styles.sheetSummaryCard} aria-labelledby="sheet-summary-title">
             <div className={styles.toolbarIntro}>
+              <h2 id="sheet-summary-title">シート概要</h2>
               <p className={styles.meta}>
                 価格セルまたは日付セルをクリックして追加・編集できます。
               </p>
               <p className={styles.resultCount}>
                 表示中: {filteredRows.length.toLocaleString("ja-JP")} /{" "}
-                {currentGrid.rows.length.toLocaleString("ja-JP")} 商品
+                {currentGrid.rows.length.toLocaleString("ja-JP")} 商品 ・ 表示業者:{" "}
+                {visibleVendors.length.toLocaleString("ja-JP")} /{" "}
+                {currentGrid.vendors.length.toLocaleString("ja-JP")} 業者
               </p>
             </div>
-            <div className={styles.sheetControls}>
+            <div className={styles.sheetActions}>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={openProductForm}
+                disabled={isCreatingProduct}
+              >
+                商品追加
+              </button>
+            </div>
+          </section>
+
+          <div className={styles.sheetControlGrid}>
+            <section className={styles.sheetSearchCard} aria-labelledby="sheet-search-title">
+              <div className={styles.cardHeaderCompact}>
+                <h2 id="sheet-search-title">シート検索</h2>
+                <p>表示中カテゴリの商品を絞り込みます。</p>
+              </div>
               <label className={styles.searchField}>
                 <span>このシート内を検索</span>
                 <input
@@ -695,71 +715,76 @@ export default function ProductSheetViewer({
                   onChange={(event) => setSearchQuery(event.target.value)}
                 />
               </label>
-              <div className={styles.vendorControl}>
-                <button
-                  type="button"
-                  className={styles.secondaryButton}
-                  aria-expanded={isVendorPanelOpen}
-                  onClick={() => setIsVendorPanelOpen((current) => !current)}
-                >
-                  表示業者
-                </button>
-                {isVendorPanelOpen && (
-                  <div className={styles.vendorPanel}>
-                    <div className={styles.vendorPanelHeader}>
-                      <strong>表示業者</strong>
-                      <button type="button" className={styles.textButton} onClick={showAllVendors}>
-                        すべて表示
-                      </button>
-                    </div>
-                    <div className={styles.vendorCheckboxList}>
-                      {currentGrid.vendors.map((vendor) => {
-                        const checked = visibleVendorNames.has(vendor.vendorName);
-                        return (
-                          <label key={vendor.vendorName} className={styles.vendorCheckbox}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={checked && visibleVendorNames.size <= 1}
-                              onChange={() => toggleVendorVisibility(vendor.vendorName)}
-                            />
-                            <span>{vendor.vendorName}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <p className={styles.vendorPanelHint}>最後の1業者は非表示にできません。</p>
-                  </div>
-                )}
+            </section>
+
+            <section className={styles.sheetDisplayControls} aria-labelledby="sheet-display-title">
+              <div className={styles.cardHeaderCompact}>
+                <h2 id="sheet-display-title">表示設定</h2>
+                <p>業者列の表示と横移動をまとめて操作します。</p>
               </div>
-              <label className={styles.jumpField}>
-                <span>業者へ移動</span>
-                <select
-                  defaultValue=""
-                  aria-label="業者へ移動"
-                  onChange={(event) => {
-                    const vendorName = event.target.value;
-                    if (vendorName) jumpToVendor(vendorName);
-                    event.target.value = "";
-                  }}
-                >
-                  <option value="">業者を選択</option>
-                  {visibleVendors.map((vendor) => (
-                    <option key={vendor.vendorName} value={vendor.vendorName}>
-                      {vendor.vendorName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={openProductForm}
-                disabled={isCreatingProduct}
-              >
-                商品追加
-              </button>
-            </div>
+              <div className={styles.sheetControls}>
+                <div className={styles.vendorControl}>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    aria-expanded={isVendorPanelOpen}
+                    onClick={() => setIsVendorPanelOpen((current) => !current)}
+                  >
+                    表示業者
+                  </button>
+                  {isVendorPanelOpen && (
+                    <div className={styles.vendorPanel}>
+                      <div className={styles.vendorPanelHeader}>
+                        <strong>表示業者</strong>
+                        <button
+                          type="button"
+                          className={styles.textButton}
+                          onClick={showAllVendors}
+                        >
+                          すべて表示
+                        </button>
+                      </div>
+                      <div className={styles.vendorCheckboxList}>
+                        {currentGrid.vendors.map((vendor) => {
+                          const checked = visibleVendorNames.has(vendor.vendorName);
+                          return (
+                            <label key={vendor.vendorName} className={styles.vendorCheckbox}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={checked && visibleVendorNames.size <= 1}
+                                onChange={() => toggleVendorVisibility(vendor.vendorName)}
+                              />
+                              <span>{vendor.vendorName}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <p className={styles.vendorPanelHint}>最後の1業者は非表示にできません。</p>
+                    </div>
+                  )}
+                </div>
+                <label className={styles.jumpField}>
+                  <span>業者へ移動</span>
+                  <select
+                    defaultValue=""
+                    aria-label="業者へ移動"
+                    onChange={(event) => {
+                      const vendorName = event.target.value;
+                      if (vendorName) jumpToVendor(vendorName);
+                      event.target.value = "";
+                    }}
+                  >
+                    <option value="">業者を選択</option>
+                    {visibleVendors.map((vendor) => (
+                      <option key={vendor.vendorName} value={vendor.vendorName}>
+                        {vendor.vendorName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
           </div>
           {isProductFormOpen && (
             <div className={styles.modalOverlay} role="presentation">

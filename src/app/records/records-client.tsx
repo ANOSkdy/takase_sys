@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { RecordRow, RecordSearchResult } from "@/services/records/search";
+import styles from "./records.module.css";
 
 type ApiProblem = {
   title?: string;
@@ -157,36 +158,32 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   const to = Math.min(result.total, result.page * result.pageSize);
 
   const Filters = (
-    <form onSubmit={onSubmit} style={{ display: "grid", gap: "var(--space-3)" }}>
-      <div style={{ display: "grid", gap: "var(--space-2)" }}>
-        <label style={{ fontSize: 12, color: "var(--muted)" }}>フリーワード（あいまい検索）</label>
-        <input
-          value={form.q}
-          onChange={(e) => setForm({ ...form, q: e.target.value })}
-          placeholder="例：バルブ 20A / 山田商事 など"
-          style={inputStyle}
-        />
-      </div>
-
-      <div style={{ display: "grid", gap: "var(--space-2)" }}>
-        <label style={{ fontSize: 12, color: "var(--muted)" }}>カテゴリ</label>
-        <select
-          value={form.category}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
-          style={{ ...inputStyle, height: 40 }}
-        >
-          <option value="">すべてのカテゴリ</option>
-          {result.categories.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div style={grid2}>
-        <Field label="品名" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
-        <Field label="規格" value={form.spec} onChange={(v) => setForm({ ...form, spec: v })} />
+    <form onSubmit={onSubmit} className={styles.filtersForm}>
+      <div className={styles.filterRowPrimary}>
+        <label className={styles.field}>
+          <span>フリーワード（あいまい検索）</span>
+          <input
+            className={styles.input}
+            value={form.q}
+            onChange={(e) => setForm({ ...form, q: e.target.value })}
+            placeholder="例：バルブ 20A / 山田商事 など"
+          />
+        </label>
+        <label className={styles.field}>
+          <span>カテゴリ</span>
+          <select
+            className={styles.select}
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
+          >
+            <option value="">すべてのカテゴリ</option>
+            {result.categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </label>
         <Field
           label="ベンダー"
           value={form.vendor}
@@ -194,78 +191,69 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
         />
       </div>
 
-      <div style={grid2}>
-        <div style={{ display: "grid", gap: "var(--space-2)" }}>
-          <label style={{ fontSize: 12, color: "var(--muted)" }}>価格（最小）</label>
+      <div className={styles.filterRowSecondary}>
+        <Field label="品名" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
+        <Field label="規格" value={form.spec} onChange={(v) => setForm({ ...form, spec: v })} />
+        <label className={styles.field}>
+          <span>価格（最小）</span>
           <input
+            className={styles.input}
             inputMode="numeric"
             value={form.priceMin}
             onChange={(e) => setForm({ ...form, priceMin: e.target.value })}
             placeholder="例：100"
-            style={inputStyle}
           />
-        </div>
-        <div style={{ display: "grid", gap: "var(--space-2)" }}>
-          <label style={{ fontSize: 12, color: "var(--muted)" }}>価格（最大）</label>
+        </label>
+        <label className={styles.field}>
+          <span>価格（最大）</span>
           <input
+            className={styles.input}
             inputMode="numeric"
             value={form.priceMax}
             onChange={(e) => setForm({ ...form, priceMax: e.target.value })}
             placeholder="例：10000"
-            style={inputStyle}
           />
-        </div>
-      </div>
-
-      <div style={grid2}>
-        <div style={{ display: "grid", gap: "var(--space-2)" }}>
-          <label style={{ fontSize: 12, color: "var(--muted)" }}>最終更新日（From）</label>
+        </label>
+        <label className={styles.field}>
+          <span>更新日（From）</span>
           <input
+            className={styles.input}
             type="date"
             value={form.updatedFrom}
             onChange={(e) => setForm({ ...form, updatedFrom: e.target.value })}
-            style={inputStyle}
           />
-        </div>
-        <div style={{ display: "grid", gap: "var(--space-2)" }}>
-          <label style={{ fontSize: 12, color: "var(--muted)" }}>最終更新日（To）</label>
+        </label>
+        <label className={styles.field}>
+          <span>更新日（To）</span>
           <input
+            className={styles.input}
             type="date"
             value={form.updatedTo}
             onChange={(e) => setForm({ ...form, updatedTo: e.target.value })}
-            style={inputStyle}
           />
-        </div>
+        </label>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "var(--space-2)",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <div style={{ display: "flex", gap: "var(--space-2)", alignItems: "center" }}>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>表示件数</span>
+      <div className={styles.filterActions}>
+        <label className={styles.pageSizeControl}>
+          <span className={styles.inlineLabel}>表示件数</span>
           <select
+            className={styles.select}
             value={String(pageSize)}
             onChange={(e) =>
               router.push(`/records?${withParam(sp, { page: "1", pageSize: e.target.value })}`)
             }
-            style={{ ...inputStyle, height: 36, padding: "0 10px" }}
           >
             <option value="20">20</option>
             <option value="50">50</option>
             <option value="100">100</option>
           </select>
-        </div>
-
-        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-          <button type="button" onClick={clear} style={btnSecondary}>
+        </label>
+        <div className={styles.buttonGroup}>
+          <button type="button" onClick={clear} className={styles.secondaryButton}>
             クリア
           </button>
-          <button type="submit" style={btnPrimary}>
+          <button type="submit" className={styles.primaryButton}>
             検索
           </button>
         </div>
@@ -274,23 +262,38 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
   );
 
   return (
-    <section style={{ display: "grid", gap: "var(--space-4)" }}>
-      <div className="filtersDesktop" style={cardStyle}>
+    <section className={styles.recordsSection}>
+      <header className={styles.hero}>
+        <div className={styles.heroText}>
+          <span className={styles.totalBadge}>全 {result.total.toLocaleString("ja-JP")} 件</span>
+          <h1>仕切り表</h1>
+          <p>商品・規格・ベンダー・価格を条件で絞り込み、一覧から編集できます。</p>
+        </div>
+        <button
+          type="button"
+          className={styles.primaryButton}
+          onClick={() => router.push(`/records?${withParam(sp, { new: "1" })}`)}
+        >
+          商品追加
+        </button>
+      </header>
+
+      <div className={`${styles.filterCard} ${styles.desktopFilters}`}>
         <button
           type="button"
           onClick={() => setDesktopOpen((prev) => !prev)}
-          style={accordionButton}
+          className={styles.filterToggle}
           aria-expanded={desktopOpen}
         >
-          <span>フィルタ</span>
+          <span>検索条件</span>
           <span aria-hidden="true">{desktopOpen ? "−" : "+"}</span>
         </button>
-        {desktopOpen && <div style={{ marginTop: "var(--space-3)" }}>{Filters}</div>}
+        {desktopOpen && Filters}
       </div>
 
-      <div className="filtersMobile" style={{ display: "none" }}>
-        <button style={btnPrimary} onClick={() => setDrawerOpen(true)}>
-          フィルタ
+      <div className={styles.mobileFilters}>
+        <button className={styles.primaryButton} onClick={() => setDrawerOpen(true)}>
+          検索条件を開く
         </button>
       </div>
 
@@ -298,35 +301,41 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
         <div
           role="dialog"
           aria-modal="true"
-          style={drawerBackdrop}
+          className={styles.drawerBackdrop}
           onClick={() => setDrawerOpen(false)}
         >
-          <div style={drawerPanel} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <strong>フィルタ</strong>
-              <button style={btnSecondary} onClick={() => setDrawerOpen(false)}>
+          <div className={styles.drawerPanel} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.drawerHeader}>
+              <strong>検索条件</strong>
+              <button className={styles.secondaryButton} onClick={() => setDrawerOpen(false)}>
                 閉じる
               </button>
             </div>
-            <div style={{ marginTop: "var(--space-3)" }}>{Filters}</div>
+            {Filters}
           </div>
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ color: "var(--muted)" }}>
-          {from}–{to} / {result.total} 件
+      <div className={styles.resultToolbar}>
+        <div>
+          <strong>検索結果</strong>
+          <div className={styles.rangeText}>
+            {from}–{to} / {result.total.toLocaleString("ja-JP")} 件を表示
+          </div>
         </div>
-
-        <div style={{ display: "flex", gap: "var(--space-2)" }}>
-          <button style={btnSecondary} disabled={page <= 1} onClick={() => apply(page - 1)}>
+        <div className={styles.pagination}>
+          <button
+            className={styles.secondaryButton}
+            disabled={page <= 1}
+            onClick={() => apply(page - 1)}
+          >
             前へ
           </button>
-          <span style={{ alignSelf: "center", color: "var(--muted)" }}>
+          <span className={styles.pageIndicator}>
             {page} / {totalPages}
           </span>
           <button
-            style={btnSecondary}
+            className={styles.secondaryButton}
             disabled={page >= totalPages}
             onClick={() => apply(page + 1)}
           >
@@ -335,8 +344,8 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
         </div>
       </div>
 
-      <div style={{ overflowX: "auto", background: "transparent" }}>
-        <table style={tableStyle}>
+      <div className={styles.tableCard}>
+        <table className={styles.table}>
           <thead>
             <tr>
               <Th>品名</Th>
@@ -401,17 +410,6 @@ export default function RecordsSearchClient({ result }: { result: RecordSearchRe
           }}
         />
       )}
-
-      <style jsx>{`
-        @media (max-width: 840px) {
-          .filtersDesktop {
-            display: none;
-          }
-          .filtersMobile {
-            display: block !important;
-          }
-        }
-      `}</style>
     </section>
   );
 }
@@ -757,13 +755,13 @@ function Field({
   inputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   return (
-    <div style={{ display: "grid", gap: "var(--space-2)" }}>
-      <label style={{ fontSize: 12, color: "var(--muted)" }}>{label}</label>
+    <div className={styles.field}>
+      <label>{label}</label>
       <input
         ref={inputRef}
+        className={styles.input}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={inputStyle}
       />
       {error && <p style={{ margin: 0, color: "var(--color-danger)", fontSize: 12 }}>{error}</p>}
     </div>
@@ -778,14 +776,6 @@ function withParam(sp: ReturnType<typeof useSearchParams>, patch: Record<string,
   }
   return p.toString();
 }
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-lg)",
-  boxShadow: "var(--shadow-soft)",
-  padding: "var(--space-4)",
-};
 
 const inputStyle: React.CSSProperties = {
   height: 40,
@@ -816,48 +806,6 @@ const btnSecondary: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const accordionButton: React.CSSProperties = {
-  width: "100%",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "var(--space-2)",
-  border: "1px solid var(--border)",
-  background: "rgba(0,0,0,0.04)",
-  padding: "10px 12px",
-  borderRadius: "var(--radius-md)",
-  fontSize: 14,
-  fontWeight: 700,
-  cursor: "pointer",
-  color: "var(--text)",
-};
-
-const grid2: React.CSSProperties = {
-  display: "grid",
-  gap: "var(--space-3)",
-  gridTemplateColumns: "1fr 1fr",
-};
-
-const drawerBackdrop: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.35)",
-  display: "grid",
-  placeItems: "end",
-  padding: "var(--space-4)",
-  zIndex: 20,
-};
-
-const drawerPanel: React.CSSProperties = {
-  width: "min(920px, 100%)",
-  maxHeight: "80vh",
-  overflow: "auto",
-  background: "var(--surface)",
-  borderRadius: "var(--radius-lg)",
-  boxShadow: "var(--shadow-soft)",
-  padding: "var(--space-4)",
-};
-
 const modalBackdrop: React.CSSProperties = {
   position: "fixed",
   inset: 0,
@@ -878,32 +826,8 @@ const modalPanel: React.CSSProperties = {
   padding: "var(--space-4)",
 };
 
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "separate",
-  borderSpacing: 0,
-  background: "var(--surface)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius-lg)",
-  overflow: "hidden",
-};
-
 function Th({ children, align }: { children: React.ReactNode; align?: "left" | "right" }) {
-  return (
-    <th
-      style={{
-        textAlign: align ?? "left",
-        padding: "12px 12px",
-        fontSize: 12,
-        color: "var(--muted)",
-        borderBottom: "1px solid var(--border)",
-        background: "rgba(0,0,0,0.02)",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </th>
-  );
+  return <th className={align === "right" ? styles.alignRight : undefined}>{children}</th>;
 }
 
 function Td({
@@ -916,15 +840,7 @@ function Td({
   align?: "left" | "right";
 }) {
   return (
-    <td
-      style={{
-        padding: "12px 12px",
-        borderBottom: "1px solid rgba(0,0,0,0.06)",
-        color: muted ? "var(--muted)" : "var(--text)",
-        textAlign: align ?? "left",
-        verticalAlign: "top",
-      }}
-    >
+    <td className={`${muted ? styles.muted : ""} ${align === "right" ? styles.alignRight : ""}`}>
       {children}
     </td>
   );

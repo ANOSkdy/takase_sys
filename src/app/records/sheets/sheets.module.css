@@ -766,3 +766,69 @@
     width: 100%;
   }
 }
+
+.sheetSummaryCard,
+.sheetSearchCard,
+.sheetDisplayControls {
+  display: grid;
+  gap: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.sheetSummaryCard {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.sheetControlGrid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.4fr);
+  gap: var(--space-4);
+}
+
+.cardHeaderCompact {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.cardHeaderCompact h2,
+.cardHeaderCompact p,
+.toolbarIntro h2 {
+  margin: 0;
+}
+
+.cardHeaderCompact h2,
+.toolbarIntro h2 {
+  font-size: 1rem;
+}
+
+.cardHeaderCompact p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.sheetActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (max-width: 900px) {
+  .sheetControlGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .sheetSummaryCard,
+  .sheetActions,
+  .sheetActions button {
+    width: 100%;
+  }
+}
