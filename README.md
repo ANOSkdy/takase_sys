@@ -9,6 +9,17 @@
 - DB: Neon（Postgres）
 - AI: Gemini API（gemini 3 Flash）
 
+## Local verification
+
+Use Node.js 24 and the pnpm version declared in `package.json`.
+
+```sh
+corepack enable
+pnpm install --frozen-lockfile
+pnpm format
+pnpm verify
+```
+
 ## No in-app authentication
 
 - アプリ内認証は実装しない方針
