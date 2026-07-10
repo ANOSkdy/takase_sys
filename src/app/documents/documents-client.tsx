@@ -429,11 +429,10 @@ export default function DocumentsClient({
           <table style={tableStyle}>
             <colgroup>
               <col style={{ width: 44 }} />
-              <col style={{ width: 320 }} />
+              <col style={{ width: 420 }} />
               <col style={{ width: 170 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 170 }} />
-              <col style={{ width: 196 }} />
+              <col style={{ width: 156 }} />
+              <col style={{ width: 248 }} />
             </colgroup>
             <thead>
               <tr>
@@ -448,7 +447,6 @@ export default function DocumentsClient({
                 <Th>ファイル名</Th>
                 <Th>アップロード日時</Th>
                 <Th>ステータス</Th>
-                <Th>仕入先</Th>
                 <Th>操作</Th>
               </tr>
             </thead>
@@ -472,15 +470,12 @@ export default function DocumentsClient({
                   </Td>
                   <Td muted>{formatDateTime(item.uploadedAt)}</Td>
                   <Td>
-                    <StatusChip status={item.status} />
-                  </Td>
-                  <Td>
-                    <span style={textClampStyle} title={item.vendorName ?? "-"}>
-                      {item.vendorName ?? "-"}
+                    <span style={noWrapCellStyle}>
+                      <StatusChip status={item.status} />
                     </span>
                   </Td>
                   <Td>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div style={documentActionStyle}>
                       <button
                         style={btnPrimary}
                         onClick={() => onParse(item.documentId, item.fileName)}
@@ -509,7 +504,7 @@ export default function DocumentsClient({
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={5}
                     style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
                   >
                     まだアップロードされたPDFがありません。
@@ -679,6 +674,7 @@ function StatusChip({ status }: { status: DocumentListItem["status"] }) {
         fontSize: 12,
         fontWeight: 600,
         display: "inline-block",
+        whiteSpace: "nowrap",
       }}
     >
       {labelMap[status]}
@@ -820,8 +816,8 @@ const tableWrapperStyle: CSSProperties = {
 };
 
 const tableStyle: CSSProperties = {
-  width: 1300,
-  minWidth: 1300,
+  width: 1038,
+  minWidth: 1038,
   tableLayout: "fixed",
   borderCollapse: "separate",
   borderSpacing: 0,
@@ -861,18 +857,21 @@ const uploadFileNameStyle: CSSProperties = {
 
 const fileNameStyle: CSSProperties = {
   display: "inline-block",
-  maxWidth: 320,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  maxWidth: "100%",
+  overflowWrap: "anywhere",
+  whiteSpace: "normal",
   verticalAlign: "top",
 };
 
-const textClampStyle: CSSProperties = {
-  display: "inline-block",
-  maxWidth: "100%",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
+const noWrapCellStyle: CSSProperties = {
+  display: "inline-flex",
+  whiteSpace: "nowrap",
+};
+
+const documentActionStyle: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "nowrap",
   whiteSpace: "nowrap",
 };
 

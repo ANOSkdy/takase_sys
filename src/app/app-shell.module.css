@@ -1,0 +1,136 @@
+.shell {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  grid-template-rows: 48px minmax(0, 1fr);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.shell[data-collapsed="true"] {
+  grid-template-columns: 52px minmax(0, 1fr);
+}
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-header-bg);
+  padding: 0 12px;
+  z-index: 40;
+}
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+.collapseButton,
+.mobileMenuButton {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-btn);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.mobileMenuButton {
+  display: none;
+}
+.sidebar {
+  grid-row: 2;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  min-width: 0;
+  overflow: hidden;
+}
+.nav {
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+}
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  border-radius: var(--radius-menu);
+  padding: 0 8px;
+  color: var(--color-text-sub);
+  font-weight: 600;
+}
+.navLink:hover {
+  background: var(--color-row-hover);
+  color: var(--color-text);
+}
+.navLink[data-active="true"] {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+.navIcon {
+  width: 20px;
+  text-align: center;
+  flex: 0 0 20px;
+}
+.shell[data-collapsed="true"] .navText {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.shell[data-collapsed="true"] .navLink {
+  justify-content: center;
+  padding: 0;
+}
+.content {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  overflow: auto;
+}
+.drawerLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.32);
+}
+.drawer {
+  width: min(280px, 86vw);
+  height: 100%;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-menu);
+}
+.drawerHeader {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+@media (max-width: 767px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 48px minmax(0, 1fr);
+  }
+  .sidebar,
+  .collapseButton {
+    display: none;
+  }
+  .mobileMenuButton {
+    display: inline-grid;
+  }
+  .content {
+    grid-column: 1;
+  }
+}
