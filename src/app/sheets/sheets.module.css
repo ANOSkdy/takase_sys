@@ -3,6 +3,7 @@
   gap: var(--space-4);
   min-height: 100%;
   padding: var(--space-4);
+  padding-bottom: 56px;
 }
 
 .header {
@@ -57,7 +58,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
-  box-shadow: var(--shadow-soft);
 }
 
 .topScrollBar[data-visible="true"] {
@@ -112,37 +112,24 @@
   background: var(--color-row-hover);
 }
 
-.stickyName {
-  min-width: 240px;
-  max-width: 280px;
-}
-
-.stickyMaker {
-  min-width: 140px;
-  max-width: 180px;
-}
-
-.stickySpec {
-  min-width: 180px;
-  max-width: 240px;
-}
-
 .priceCell {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .sheetTabs {
-  position: sticky;
+  position: fixed;
+  right: 0;
   bottom: 0;
-  z-index: 15;
+  left: 208px;
+  z-index: 45;
   display: flex;
   gap: 1px;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 4px var(--space-2);
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
   box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.06);
 }
 
@@ -195,7 +182,7 @@
     padding-inline: var(--space-4);
   }
 
-  .stickyName {
+  .colName {
     min-width: 180px;
     max-width: 220px;
   }
@@ -796,47 +783,51 @@
   opacity: 0.5;
 }
 
-.stickyNo {
-  position: sticky;
-  left: 0;
-  z-index: 4;
+.colNo {
   min-width: 56px !important;
   max-width: 56px !important;
-  background: var(--color-surface);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.stickyName {
-  position: sticky;
-  left: 56px;
-  z-index: 4;
+
+.colName {
+  min-width: 240px;
+  max-width: 280px;
+}
+
+.colMaker {
+  min-width: 140px;
+  max-width: 180px;
+}
+
+.colSpec {
+  min-width: 180px;
+  max-width: 240px;
+}
+
+.secondaryPanel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
   background: var(--color-surface);
 }
-.stickyMaker {
-  position: sticky;
-  left: 296px;
-  z-index: 4;
-  background: var(--color-surface);
+
+.secondaryPanel summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  color: var(--color-text-sub);
+  font-weight: 700;
+  cursor: pointer;
 }
-.stickySpec {
-  position: sticky;
-  left: 436px;
-  z-index: 4;
-  background: var(--color-surface);
+
+.secondaryPanelBody {
+  display: grid;
+  gap: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-3);
 }
-thead .stickyNo,
-thead .stickyName,
-thead .stickyMaker,
-thead .stickySpec {
-  z-index: 7;
-  background: var(--color-header-bg);
-}
-.sheetTable tbody tr:hover .stickyNo,
-.sheetTable tbody tr:hover .stickyName,
-.sheetTable tbody tr:hover .stickyMaker,
-.sheetTable tbody tr:hover .stickySpec {
-  background: var(--color-row-hover);
-}
+
 .filterChips {
   display: flex;
   gap: 6px;
@@ -875,4 +866,21 @@ thead .stickySpec {
 .disabledButton {
   opacity: 0.5;
   pointer-events: none;
+}
+
+:global([data-collapsed="true"]) .sheetTabs {
+  left: 52px;
+}
+
+@media (max-width: 767px) {
+  .sheetTabs {
+    left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .colName {
+    min-width: 180px;
+    max-width: 220px;
+  }
 }

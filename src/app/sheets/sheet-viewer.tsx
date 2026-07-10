@@ -670,15 +670,6 @@ export default function ProductSheetViewer({
       ) : (
         <>
           <div className={styles.editToolbar}>
-            <div className={styles.toolbarIntro}>
-              <p className={styles.meta}>
-                価格セルまたは日付セルをクリックして追加・編集できます。
-              </p>
-              <p className={styles.resultCount}>
-                表示中: {currentGrid.rows.length.toLocaleString("ja-JP")} /{" "}
-                {(currentGrid.totalCount ?? currentGrid.rows.length).toLocaleString("ja-JP")} 商品
-              </p>
-            </div>
             <div className={styles.sheetControls}>
               <div className={styles.vendorControl}>
                 <button
@@ -738,59 +729,69 @@ export default function ProductSheetViewer({
               </label>
             </div>
           </div>
-          <form className={styles.searchForm} action="/sheets">
-            {currentGrid?.category ? (
-              <input type="hidden" name="category" value={currentGrid.category} />
-            ) : null}
-            <label className={styles.searchField}>
-              <span>全体検索</span>
-              <input
-                name="q"
-                type="search"
-                defaultValue={searchParams.get("q") ?? ""}
-                placeholder="品名・規格・業者"
-              />
-            </label>
-            <label className={styles.searchField}>
-              <span>品名</span>
-              <input name="productName" defaultValue={searchParams.get("productName") ?? ""} />
-            </label>
-            <label className={styles.searchField}>
-              <span>業者</span>
-              <input name="vendor" defaultValue={searchParams.get("vendor") ?? ""} />
-            </label>
-            <label className={styles.jumpField}>
-              <span>件数</span>
-              <select name="pageSize" defaultValue={searchParams.get("pageSize") ?? "50"}>
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </label>
-            <input type="hidden" name="page" value="1" />
-            <button className={styles.primaryButton} type="submit">
-              検索
-            </button>
-          </form>
-          <div className={styles.filterChips} aria-label="適用中の検索条件">
-            {[
-              ["q", "全体", searchParams.get("q")],
-              ["productName", "品名", searchParams.get("productName")],
-              ["vendor", "業者", searchParams.get("vendor")],
-            ]
-              .filter(([, , value]) => value)
-              .map(([key, label, value]) => {
-                const params = new URLSearchParams(searchParams);
-                params.delete(String(key));
-                params.delete("page");
-                const href = params.toString() ? `/sheets?${params.toString()}` : "/sheets";
-                return (
-                  <Link key={String(key)} href={href} className={styles.filterChip}>
-                    {label}: {value} <span aria-hidden>×</span>
-                  </Link>
-                );
-              })}
-          </div>
+          <details className={styles.secondaryPanel}>
+            <summary>検索・表示条件</summary>
+            <div className={styles.secondaryPanelBody}>
+              <p className={styles.meta}>
+                価格セルまたは日付セルをクリックして追加・編集できます。表示中:{" "}
+                {currentGrid.rows.length.toLocaleString("ja-JP")} /{" "}
+                {(currentGrid.totalCount ?? currentGrid.rows.length).toLocaleString("ja-JP")} 商品
+              </p>
+              <form className={styles.searchForm} action="/sheets">
+                {currentGrid?.category ? (
+                  <input type="hidden" name="category" value={currentGrid.category} />
+                ) : null}
+                <label className={styles.searchField}>
+                  <span>全体検索</span>
+                  <input
+                    name="q"
+                    type="search"
+                    defaultValue={searchParams.get("q") ?? ""}
+                    placeholder="品名・規格・業者"
+                  />
+                </label>
+                <label className={styles.searchField}>
+                  <span>品名</span>
+                  <input name="productName" defaultValue={searchParams.get("productName") ?? ""} />
+                </label>
+                <label className={styles.searchField}>
+                  <span>業者</span>
+                  <input name="vendor" defaultValue={searchParams.get("vendor") ?? ""} />
+                </label>
+                <label className={styles.jumpField}>
+                  <span>件数</span>
+                  <select name="pageSize" defaultValue={searchParams.get("pageSize") ?? "50"}>
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                </label>
+                <input type="hidden" name="page" value="1" />
+                <button className={styles.primaryButton} type="submit">
+                  検索
+                </button>
+              </form>
+              <div className={styles.filterChips} aria-label="適用中の検索条件">
+                {[
+                  ["q", "全体", searchParams.get("q")],
+                  ["productName", "品名", searchParams.get("productName")],
+                  ["vendor", "業者", searchParams.get("vendor")],
+                ]
+                  .filter(([, , value]) => value)
+                  .map(([key, label, value]) => {
+                    const params = new URLSearchParams(searchParams);
+                    params.delete(String(key));
+                    params.delete("page");
+                    const href = params.toString() ? `/sheets?${params.toString()}` : "/sheets";
+                    return (
+                      <Link key={String(key)} href={href} className={styles.filterChip}>
+                        {label}: {value} <span aria-hidden>×</span>
+                      </Link>
+                    );
+                  })}
+              </div>
+            </div>
+          </details>
           {isProductFormOpen && (
             <div className={styles.modalOverlay} role="presentation">
               <section
@@ -1137,16 +1138,16 @@ export default function ProductSheetViewer({
                 <table className={styles.sheetTable}>
                   <thead>
                     <tr>
-                      <th className={styles.stickyNo} scope="col" rowSpan={2}>
+                      <th className={styles.colNo} scope="col" rowSpan={2}>
                         No.
                       </th>
-                      <th className={styles.stickyName} scope="col" rowSpan={2}>
+                      <th className={styles.colName} scope="col" rowSpan={2}>
                         品名
                       </th>
-                      <th className={styles.stickyMaker} scope="col" rowSpan={2}>
+                      <th className={styles.colMaker} scope="col" rowSpan={2}>
                         メーカー
                       </th>
-                      <th className={styles.stickySpec} scope="col" rowSpan={2}>
+                      <th className={styles.colSpec} scope="col" rowSpan={2}>
                         規格
                       </th>
                       {visibleVendors.map((vendor) => (
@@ -1188,15 +1189,15 @@ export default function ProductSheetViewer({
                     ) : (
                       currentGrid.rows.map((row, rowIndex) => (
                         <tr key={row.productId}>
-                          <td className={styles.stickyNo}>
+                          <td className={styles.colNo}>
                             {((currentGrid.page ?? 1) - 1) *
                               (currentGrid.pageSize ?? currentGrid.rows.length) +
                               rowIndex +
                               1}
                           </td>
-                          <td className={styles.stickyName}>{row.productName}</td>
-                          <td className={styles.stickyMaker}>{row.productMaker ?? "-"}</td>
-                          <td className={styles.stickySpec}>{row.spec ?? "-"}</td>
+                          <td className={styles.colName}>{row.productName}</td>
+                          <td className={styles.colMaker}>{row.productMaker ?? "-"}</td>
+                          <td className={styles.colSpec}>{row.spec ?? "-"}</td>
                           {visibleVendors.map((vendor) => {
                             const price = row.prices[vendor.vendorName];
                             const modalModeLabel = price ? "編集" : "追加";
