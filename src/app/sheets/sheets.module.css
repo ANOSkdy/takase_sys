@@ -890,3 +890,23 @@
     max-width: 220px;
   }
 }
+
+.sheetTable .colName {
+  width: 320px;
+  min-width: 240px;
+  max-width: 320px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.sheetTable .colSpec {
+  width: 220px;
+  min-width: 180px;
+  max-width: 240px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-all;
+}

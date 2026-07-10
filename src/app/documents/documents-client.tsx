@@ -431,8 +431,8 @@ export default function DocumentsClient({
               <col style={{ width: 44 }} />
               <col style={{ width: 420 }} />
               <col style={{ width: 170 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 196 }} />
+              <col style={{ width: 156 }} />
+              <col style={{ width: 248 }} />
             </colgroup>
             <thead>
               <tr>
@@ -470,10 +470,12 @@ export default function DocumentsClient({
                   </Td>
                   <Td muted>{formatDateTime(item.uploadedAt)}</Td>
                   <Td>
-                    <StatusChip status={item.status} />
+                    <span style={noWrapCellStyle}>
+                      <StatusChip status={item.status} />
+                    </span>
                   </Td>
                   <Td>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <div style={documentActionStyle}>
                       <button
                         style={btnPrimary}
                         onClick={() => onParse(item.documentId, item.fileName)}
@@ -672,6 +674,7 @@ function StatusChip({ status }: { status: DocumentListItem["status"] }) {
         fontSize: 12,
         fontWeight: 600,
         display: "inline-block",
+        whiteSpace: "nowrap",
       }}
     >
       {labelMap[status]}
@@ -813,8 +816,8 @@ const tableWrapperStyle: CSSProperties = {
 };
 
 const tableStyle: CSSProperties = {
-  width: 950,
-  minWidth: 950,
+  width: 1038,
+  minWidth: 1038,
   tableLayout: "fixed",
   borderCollapse: "separate",
   borderSpacing: 0,
@@ -860,6 +863,17 @@ const fileNameStyle: CSSProperties = {
   verticalAlign: "top",
 };
 
+const noWrapCellStyle: CSSProperties = {
+  display: "inline-flex",
+  whiteSpace: "nowrap",
+};
+
+const documentActionStyle: CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "nowrap",
+  whiteSpace: "nowrap",
+};
 
 const modalBackdrop: CSSProperties = {
   position: "fixed",
