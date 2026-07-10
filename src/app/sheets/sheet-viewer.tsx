@@ -81,10 +81,6 @@ function toDateInputValue(value: string | Date | null | undefined) {
   return value.toISOString().slice(0, 10);
 }
 
-function normalizeSearchText(value: string | null | undefined) {
-  return (value ?? "").toLocaleLowerCase("ja-JP");
-}
-
 function formatPrice(value: string | number | null | undefined) {
   if (value == null) return "-";
   const numeric = Number(value);
@@ -251,7 +247,6 @@ export default function ProductSheetViewer({
     status: "idle",
     items: [],
   });
-  const [searchQuery, setSearchQuery] = useState("");
   const [visibleVendorNames, setVisibleVendorNames] = useState<Set<string>>(
     () => new Set(grid?.vendors.map((vendor) => vendor.vendorName) ?? []),
   );
@@ -308,24 +303,6 @@ export default function ProductSheetViewer({
     return currentGrid.vendors.filter((vendor) => visibleVendorNames.has(vendor.vendorName));
   }, [currentGrid, visibleVendorNames]);
 
-  const filteredRows = useMemo(() => {
-    if (!currentGrid) return [];
-    const tokens = searchQuery
-      .trim()
-      .split(/[\s　]+/)
-      .filter(Boolean)
-      .map((token) => token.toLocaleLowerCase("ja-JP"));
-
-    if (tokens.length === 0) return currentGrid.rows;
-
-    return currentGrid.rows.filter((row) => {
-      const searchable = normalizeSearchText(
-        `${row.productName} ${row.productMaker ?? ""} ${row.spec ?? ""}`,
-      );
-      return tokens.every((token) => searchable.includes(token));
-    });
-  }, [currentGrid, searchQuery]);
-
   useEffect(() => {
     setCurrentGrid(grid);
     setVisibleVendorNames(new Set(grid?.vendors.map((vendor) => vendor.vendorName) ?? []));
@@ -352,7 +329,7 @@ export default function ProductSheetViewer({
     if (table) resizeObserver.observe(table);
 
     return () => resizeObserver.disconnect();
-  }, [currentGrid, visibleVendors, filteredRows, updateTopScrollbar]);
+  }, [currentGrid, visibleVendors, updateTopScrollbar]);
 
   useEffect(() => {
     if (!vendorPriceModal || vendorPriceModal.mode !== "edit") {
@@ -620,22 +597,19 @@ export default function ProductSheetViewer({
         return;
       }
 
-      const response = await fetch(
-        "/api/sheets/cells",
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            cells: [
-              {
-                vendorPriceId: vendorPriceModal.vendorPriceId,
-                unitPrice: values.unitPrice,
-                priceUpdatedOn: values.priceUpdatedOn,
-              },
-            ],
-          }),
-        },
-      );
+      const response = await fetch("/api/sheets/cells", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          cells: [
+            {
+              vendorPriceId: vendorPriceModal.vendorPriceId,
+              unitPrice: values.unitPrice,
+              priceUpdatedOn: values.priceUpdatedOn,
+            },
+          ],
+        }),
+      });
 
       if (!response.ok) {
         const problem = (await response.json().catch(() => null)) as ProblemResponse | null;
@@ -672,19 +646,22 @@ export default function ProductSheetViewer({
     <>
       <header className={styles.header}>
         <div className={styles.headerText}>
-          <h1>{currentGrid?.category ? currentGrid.category : "全商品"}</h1>
+          <h1>{currentGrid?.category ? currentGrid.category : "仕切り表"}</h1>
           <p>
             {currentGrid
-              ? `${currentGrid.rows.length.toLocaleString("ja-JP")} 商品 / ${currentGrid.vendors.length.toLocaleString(
-                  "ja-JP",
-                )} 業者のシートです。仕切りと最終更新日はセルをクリックしてモーダルで編集できます。`
+              ? `${(currentGrid.totalCount ?? currentGrid.rows.length).toLocaleString("ja-JP")} 商品 / ${visibleVendors.length.toLocaleString("ja-JP")} 業者を表示中`
               : "カテゴリをシートのように切り替えて、業者別仕切りを横展開で確認します。"}
           </p>
         </div>
         <div className={styles.actions}>
-          <Link href="/sheets" className={styles.secondaryLink}>
-            全商品
-          </Link>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={openProductForm}
+            disabled={isCreatingProduct}
+          >
+            商品追加
+          </button>
         </div>
       </header>
 
@@ -698,20 +675,11 @@ export default function ProductSheetViewer({
                 価格セルまたは日付セルをクリックして追加・編集できます。
               </p>
               <p className={styles.resultCount}>
-                表示中: {filteredRows.length.toLocaleString("ja-JP")} /{" "}
-                {currentGrid.rows.length.toLocaleString("ja-JP")} 商品
+                表示中: {currentGrid.rows.length.toLocaleString("ja-JP")} /{" "}
+                {(currentGrid.totalCount ?? currentGrid.rows.length).toLocaleString("ja-JP")} 商品
               </p>
             </div>
             <div className={styles.sheetControls}>
-              <label className={styles.searchField}>
-                <span>このシート内を検索</span>
-                <input
-                  type="search"
-                  value={searchQuery}
-                  placeholder="品名・メーカー・規格で検索"
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                />
-              </label>
               <div className={styles.vendorControl}>
                 <button
                   type="button"
@@ -768,21 +736,20 @@ export default function ProductSheetViewer({
                   ))}
                 </select>
               </label>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={openProductForm}
-                disabled={isCreatingProduct}
-              >
-                商品追加
-              </button>
             </div>
           </div>
           <form className={styles.searchForm} action="/sheets">
-            {currentGrid?.category ? <input type="hidden" name="category" value={currentGrid.category} /> : null}
+            {currentGrid?.category ? (
+              <input type="hidden" name="category" value={currentGrid.category} />
+            ) : null}
             <label className={styles.searchField}>
               <span>全体検索</span>
-              <input name="q" type="search" defaultValue={searchParams.get("q") ?? ""} placeholder="品名・規格・業者" />
+              <input
+                name="q"
+                type="search"
+                defaultValue={searchParams.get("q") ?? ""}
+                placeholder="品名・規格・業者"
+              />
             </label>
             <label className={styles.searchField}>
               <span>品名</span>
@@ -795,11 +762,35 @@ export default function ProductSheetViewer({
             <label className={styles.jumpField}>
               <span>件数</span>
               <select name="pageSize" defaultValue={searchParams.get("pageSize") ?? "50"}>
-                <option value="25">25</option><option value="50">50</option><option value="100">100</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
               </select>
             </label>
-            <button className={styles.secondaryButton} type="submit">検索</button>
+            <input type="hidden" name="page" value="1" />
+            <button className={styles.primaryButton} type="submit">
+              検索
+            </button>
           </form>
+          <div className={styles.filterChips} aria-label="適用中の検索条件">
+            {[
+              ["q", "全体", searchParams.get("q")],
+              ["productName", "品名", searchParams.get("productName")],
+              ["vendor", "業者", searchParams.get("vendor")],
+            ]
+              .filter(([, , value]) => value)
+              .map(([key, label, value]) => {
+                const params = new URLSearchParams(searchParams);
+                params.delete(String(key));
+                params.delete("page");
+                const href = params.toString() ? `/sheets?${params.toString()}` : "/sheets";
+                return (
+                  <Link key={String(key)} href={href} className={styles.filterChip}>
+                    {label}: {value} <span aria-hidden>×</span>
+                  </Link>
+                );
+              })}
+          </div>
           {isProductFormOpen && (
             <div className={styles.modalOverlay} role="presentation">
               <section
@@ -811,7 +802,11 @@ export default function ProductSheetViewer({
                 <div className={styles.productDialogHeader}>
                   <div>
                     <h2 id="add-product-title">商品追加</h2>
-                    <p>{currentGrid.category ? `${currentGrid.category} に1件ずつ商品を追加します。` : "カテゴリを指定して商品を追加します。"}</p>
+                    <p>
+                      {currentGrid.category
+                        ? `${currentGrid.category} に1件ずつ商品を追加します。`
+                        : "カテゴリを指定して商品を追加します。"}
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -870,7 +865,9 @@ export default function ProductSheetViewer({
                     </label>
 
                     <label className={styles.formField}>
-                      <span>カテゴリ <strong aria-hidden="true">*</strong></span>
+                      <span>
+                        カテゴリ <strong aria-hidden="true">*</strong>
+                      </span>
                       <input
                         type="text"
                         value={productForm.category}
@@ -1140,13 +1137,16 @@ export default function ProductSheetViewer({
                 <table className={styles.sheetTable}>
                   <thead>
                     <tr>
-                      <th className={styles.stickyName} scope="col">
+                      <th className={styles.stickyNo} scope="col" rowSpan={2}>
+                        No.
+                      </th>
+                      <th className={styles.stickyName} scope="col" rowSpan={2}>
                         品名
                       </th>
-                      <th className={styles.stickyMaker} scope="col">
+                      <th className={styles.stickyMaker} scope="col" rowSpan={2}>
                         メーカー
                       </th>
-                      <th className={styles.stickySpec} scope="col">
+                      <th className={styles.stickySpec} scope="col" rowSpan={2}>
                         規格
                       </th>
                       {visibleVendors.map((vendor) => (
@@ -1156,39 +1156,44 @@ export default function ProductSheetViewer({
                               if (element) vendorHeaderRefs.current.set(vendor.vendorName, element);
                               else vendorHeaderRefs.current.delete(vendor.vendorName);
                             }}
-                            scope="col"
+                            scope="colgroup"
+                            colSpan={2}
                             className={
                               jumpedVendorName === vendor.vendorName
                                 ? styles.vendorJumpHighlight
                                 : undefined
                             }
                           >
-                            {vendor.vendorName} 最終更新日
+                            {vendor.vendorName}
                           </th>
-                          <th
-                            scope="col"
-                            className={
-                              jumpedVendorName === vendor.vendorName
-                                ? styles.vendorJumpHighlight
-                                : undefined
-                            }
-                          >
-                            {vendor.vendorName} 仕切り
-                          </th>
+                        </Fragment>
+                      ))}
+                    </tr>
+                    <tr>
+                      {visibleVendors.map((vendor) => (
+                        <Fragment key={`${vendor.vendorName}-sub`}>
+                          <th scope="col">最終更新日</th>
+                          <th scope="col">仕切り</th>
                         </Fragment>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.length === 0 ? (
+                    {currentGrid.rows.length === 0 ? (
                       <tr>
-                        <td className={styles.noResultCell} colSpan={3 + visibleVendors.length * 2}>
+                        <td className={styles.noResultCell} colSpan={4 + visibleVendors.length * 2}>
                           条件に一致する商品がありません。
                         </td>
                       </tr>
                     ) : (
-                      filteredRows.map((row) => (
+                      currentGrid.rows.map((row, rowIndex) => (
                         <tr key={row.productId}>
+                          <td className={styles.stickyNo}>
+                            {((currentGrid.page ?? 1) - 1) *
+                              (currentGrid.pageSize ?? currentGrid.rows.length) +
+                              rowIndex +
+                              1}
+                          </td>
                           <td className={styles.stickyName}>{row.productName}</td>
                           <td className={styles.stickyMaker}>{row.productMaker ?? "-"}</td>
                           <td className={styles.stickySpec}>{row.spec ?? "-"}</td>
@@ -1241,38 +1246,68 @@ export default function ProductSheetViewer({
       )}
 
       {currentGrid?.totalCount !== undefined && currentGrid.page && currentGrid.pageSize ? (
-        <nav className={styles.pagination} aria-label="ページ切り替え">
+        <nav className={styles.statusBar} aria-label="ページ切り替え">
           <span>
-            {currentGrid.totalCount.toLocaleString("ja-JP")}件中 {currentGrid.rows.length.toLocaleString("ja-JP")}件を表示
+            {currentGrid.totalCount.toLocaleString("ja-JP")}件中{" "}
+            {((currentGrid.page - 1) * currentGrid.pageSize + 1).toLocaleString("ja-JP")}〜
+            {Math.min(
+              currentGrid.page * currentGrid.pageSize,
+              currentGrid.totalCount,
+            ).toLocaleString("ja-JP")}
+            件 / 表示業者 {visibleVendors.length.toLocaleString("ja-JP")}件 /{" "}
+            {currentGrid.page.toLocaleString("ja-JP")} /{" "}
+            {Math.max(1, Math.ceil(currentGrid.totalCount / currentGrid.pageSize)).toLocaleString(
+              "ja-JP",
+            )}
+            ページ
           </span>
-          <Link
-            className={styles.secondaryLink}
-            aria-disabled={currentGrid.page <= 1}
-            href={(() => {
-              const params = new URLSearchParams(searchParams);
-              params.set("page", String(Math.max(1, currentGrid.page - 1)));
-              return `/sheets?${params.toString()}`;
-            })()}
-          >
-            前へ
-          </Link>
-          <Link
-            className={styles.secondaryLink}
-            aria-disabled={currentGrid.page * currentGrid.pageSize >= currentGrid.totalCount}
-            href={(() => {
-              const params = new URLSearchParams(searchParams);
-              params.set("page", String(currentGrid.page + 1));
-              return `/sheets?${params.toString()}`;
-            })()}
-          >
-            次へ
-          </Link>
+          <span className={styles.statusActions}>
+            {currentGrid.page <= 1 ? (
+              <button type="button" className={styles.secondaryButton} disabled>
+                前へ
+              </button>
+            ) : (
+              <Link
+                className={styles.secondaryLink}
+                href={(() => {
+                  const params = new URLSearchParams(searchParams);
+                  params.set("page", String(Math.max(1, currentGrid.page - 1)));
+                  return `/sheets?${params.toString()}`;
+                })()}
+              >
+                前へ
+              </Link>
+            )}
+            {currentGrid.page * currentGrid.pageSize >= currentGrid.totalCount ? (
+              <button type="button" className={styles.secondaryButton} disabled>
+                次へ
+              </button>
+            ) : (
+              <Link
+                className={styles.secondaryLink}
+                href={(() => {
+                  const params = new URLSearchParams(searchParams);
+                  params.set("page", String(currentGrid.page + 1));
+                  return `/sheets?${params.toString()}`;
+                })()}
+              >
+                次へ
+              </Link>
+            )}
+          </span>
         </nav>
       ) : null}
 
       {categories.length > 0 && (
         <nav className={styles.sheetTabs} aria-label="カテゴリシート切り替え">
-          {[{ category: "全商品", productCount: currentGrid?.totalCount ?? 0, vendorCount: currentGrid?.vendors.length ?? 0 }, ...categories].map((item, index) => {
+          {[
+            {
+              category: "全商品",
+              productCount: currentGrid?.totalCount ?? 0,
+              vendorCount: currentGrid?.vendors.length ?? 0,
+            },
+            ...categories,
+          ].map((item, index) => {
             const isAll = index === 0;
             const active = isAll ? !currentGrid?.category : item.category === currentGrid?.category;
             return (

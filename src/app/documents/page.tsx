@@ -1,5 +1,4 @@
 import DocumentsClient from "./documents-client";
-import SharedNavHeader from "@/app/shared-nav-header";
 import { getMaxPdfPages, getMaxPdfSizeMb } from "@/services/documents/constants";
 import { listDocuments } from "@/services/documents/repository";
 
@@ -14,24 +13,15 @@ export default async function DocumentsPage() {
   ]);
 
   return (
-    <>
-      <SharedNavHeader />
-      <main
-        style={{
-          padding: "calc(64px + var(--space-4)) var(--space-6) var(--space-6)",
-          display: "grid",
-          gap: "var(--space-4)",
-        }}
-      >
-        <header style={{ display: "grid", gap: "var(--space-2)" }}>
-          <h1 style={{ margin: 0 }}>納品書PDF</h1>
-          <p style={{ margin: 0, color: "var(--muted)" }}>
-            PDFのみアップロードできます。解析ボタンから仕入先・明細を抽出します。
-          </p>
-        </header>
+    <main className="documents-page">
+      <header className="ui-page-header">
+        <div>
+          <h1>納品書PDF</h1>
+          <p>PDFのみアップロードできます。解析ボタンから仕入先・明細を抽出します。</p>
+        </div>
+      </header>
 
-        <DocumentsClient initialItems={items} maxPdfMb={maxPdfMb} maxPdfPages={maxPdfPages} />
-      </main>
-    </>
+      <DocumentsClient initialItems={items} maxPdfMb={maxPdfMb} maxPdfPages={maxPdfPages} />
+    </main>
   );
 }

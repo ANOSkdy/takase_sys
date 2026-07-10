@@ -1,8 +1,8 @@
 .page {
   display: grid;
   gap: var(--space-4);
-  min-height: 100vh;
-  padding: calc(64px + var(--space-4)) var(--space-6) var(--space-6);
+  min-height: 100%;
+  padding: var(--space-4);
 }
 
 .header {
@@ -48,7 +48,7 @@
 
 .topScrollBar {
   position: sticky;
-  top: calc(64px + var(--space-2));
+  top: 0;
   z-index: 20;
   display: none;
   overflow-x: auto;
@@ -71,9 +71,8 @@
 .gridWrap {
   overflow: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-input);
   background: var(--surface);
-  box-shadow: var(--shadow-soft);
 }
 
 .sheetTable {
@@ -81,7 +80,7 @@
   min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.9rem;
+  font-size: 13px;
 }
 
 .sheetTable th,
@@ -90,7 +89,8 @@
   max-width: 220px;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
-  padding: 10px 12px;
+  height: var(--row-h-standard);
+  padding: 4px 8px;
   vertical-align: top;
   white-space: nowrap;
 }
@@ -99,7 +99,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  background: color-mix(in srgb, var(--color-primary) 10%, var(--surface));
+  background: var(--color-header-bg);
   font-weight: 700;
   text-align: left;
 }
@@ -109,7 +109,7 @@
 }
 
 .sheetTable tbody tr:hover td {
-  background: color-mix(in srgb, var(--color-secondary) 16%, var(--surface));
+  background: var(--color-row-hover);
 }
 
 .stickyName {
@@ -311,9 +311,8 @@
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-input);
   background: var(--surface);
-  box-shadow: var(--shadow-soft);
 }
 
 .productDialogHeader {
@@ -783,7 +782,6 @@
   }
 }
 
-
 .pagination {
   display: flex;
   align-items: center;
@@ -796,4 +794,85 @@
 .pagination [aria-disabled="true"] {
   pointer-events: none;
   opacity: 0.5;
+}
+
+.stickyNo {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  min-width: 56px !important;
+  max-width: 56px !important;
+  background: var(--color-surface);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stickyName {
+  position: sticky;
+  left: 56px;
+  z-index: 4;
+  background: var(--color-surface);
+}
+.stickyMaker {
+  position: sticky;
+  left: 296px;
+  z-index: 4;
+  background: var(--color-surface);
+}
+.stickySpec {
+  position: sticky;
+  left: 436px;
+  z-index: 4;
+  background: var(--color-surface);
+}
+thead .stickyNo,
+thead .stickyName,
+thead .stickyMaker,
+thead .stickySpec {
+  z-index: 7;
+  background: var(--color-header-bg);
+}
+.sheetTable tbody tr:hover .stickyNo,
+.sheetTable tbody tr:hover .stickyName,
+.sheetTable tbody tr:hover .stickyMaker,
+.sheetTable tbody tr:hover .stickySpec {
+  background: var(--color-row-hover);
+}
+.filterChips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  border: 1px solid var(--color-primary-border);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: 12px;
+}
+.statusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-input);
+  padding: 6px 8px;
+  background: var(--color-surface);
+  color: var(--color-text-sub);
+}
+.statusActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.disabledButton {
+  opacity: 0.5;
+  pointer-events: none;
 }

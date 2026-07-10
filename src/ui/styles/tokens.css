@@ -1,29 +1,56 @@
-﻿:root {
-  --color-base: #f9f9f9;
-  --color-primary: #4a90e2;
-  --color-secondary: #50e3c2;
-  --color-accent1: #ffd166;
-  --color-accent2: #f25f5c;
-  --color-accent3: #9d59ec;
+:root {
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-border: #e1e1e1;
+  --color-border-strong: #c8c8c8;
+  --color-text: #242424;
+  --color-text-sub: #616161;
+  --color-text-faint: #8a8a8a;
+  --color-primary: #534491;
+  --color-primary-hover: #463879;
+  --color-primary-soft: #f4f1fb;
+  --color-primary-border: #d8d0ef;
+  --color-accent: var(--color-primary);
+  --color-accent-hover: var(--color-primary-hover);
+  --color-accent-soft: var(--color-primary-soft);
+  --color-danger: #c4314b;
+  --color-danger-soft: #fdf3f5;
+  --color-success: #0e700e;
+  --color-success-soft: #f1faf1;
+  --color-warning: #8a5a00;
+  --color-warning-soft: #fff8ec;
+  --color-header-bg: #f2f1f7;
+  --color-row-hover: #f5f5f5;
+  --color-row-selected: #ece7f8;
+  --radius-btn: 5px;
+  --radius-input: 5px;
+  --radius-menu: 7px;
+  --radius-modal: 10px;
+  --shadow-menu: 0 4px 14px rgba(0, 0, 0, 0.12);
+  --shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.18);
+  --row-h-compact: 32px;
+  --row-h-standard: 36px;
+  --row-h-comfortable: 44px;
+  --dur-modal: 200ms;
+  --dur-menu: 130ms;
+  --dur-tab: 180ms;
+  --dur-skeleton: 200ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-  --surface: #ffffff;
-  --text: #222;
-  --muted: #666;
-  --border: rgba(0, 0, 0, 0.12);
-
-  --radius-lg: 16px;
-  --radius-md: 12px;
-
-  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.08);
-
+  --color-base: var(--color-bg);
+  --surface: var(--color-surface);
+  --text: var(--color-text);
+  --muted: var(--color-text-sub);
+  --foreground: var(--color-text);
+  --background: var(--color-bg);
+  --border: var(--color-border);
+  --radius-lg: var(--radius-modal);
+  --radius-md: var(--radius-input);
+  --shadow-soft: none;
+  --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
-}
-
-html,
-body {
-  background: var(--color-base);
-  color: var(--text);
 }

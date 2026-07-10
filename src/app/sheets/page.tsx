@@ -1,4 +1,3 @@
-import SharedNavHeader from "@/app/shared-nav-header";
 import {
   listProductSheetCategories,
   productSheetsSearchSchema,
@@ -32,11 +31,8 @@ export default async function ProductSheetsPage({
   ]);
 
   return (
-    <>
-      <SharedNavHeader />
-      <main className={styles.page}>
-        <ProductSheetViewer categories={categories} grid={grid} />
-      </main>
-    </>
+    <main className={styles.page}>
+      <ProductSheetViewer categories={categories} grid={grid} />
+    </main>
   );
 }
