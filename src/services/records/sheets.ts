@@ -91,7 +91,21 @@ export type ProductSheetGrid = {
   category: string;
   vendors: ProductSheetVendor[];
   rows: ProductSheetRow[];
+  totalCount?: number;
+  page?: number;
+  pageSize?: number;
 };
+
+export const productSheetsSearchSchema = z.object({
+  category: z.string().trim().max(200).optional().transform((v) => (v ? v : undefined)),
+  q: z.string().trim().max(200).optional().transform((v) => (v ? v : undefined)),
+  productName: z.string().trim().max(300).optional().transform((v) => (v ? v : undefined)),
+  vendor: z.string().trim().max(200).optional().transform((v) => (v ? v : undefined)),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+export type ProductSheetsSearchParams = z.infer<typeof productSheetsSearchSchema>;
 
 export type UpdateProductSheetCell = z.infer<typeof updateProductSheetCellSchema>;
 export type UpdateProductSheetCellsInput = z.infer<typeof updateProductSheetCellsSchema>;
@@ -233,8 +247,105 @@ export async function getProductSheetGrid(category: string): Promise<ProductShee
   };
 }
 
+
+function likePattern(value: string) {
+  return `%${value.replace(/([%_\\])/g, "\\$1")}%`;
+}
+
+export async function searchProductSheetGrid(
+  params: ProductSheetsSearchParams,
+): Promise<ProductSheetGrid> {
+  const sql = getSql();
+  const offset = (params.page - 1) * params.pageSize;
+  const category = params.category ?? null;
+  const q = params.q ? likePattern(params.q) : null;
+  const productName = params.productName ? likePattern(params.productName) : null;
+  const vendor = params.vendor ? likePattern(params.vendor) : null;
+
+  const productIds = await sql<{ productId: string }[]>`
+    SELECT pm.product_id AS "productId"
+    FROM product_master pm
+    WHERE (${category}::text IS NULL OR pm.category = ${category})
+      AND (${productName}::text IS NULL OR pm.product_name ILIKE ${productName} ESCAPE '\\')
+      AND (
+        ${q}::text IS NULL
+        OR pm.product_name ILIKE ${q} ESCAPE '\\'
+        OR pm.spec ILIKE ${q} ESCAPE '\\'
+        OR pm.product_id::text ILIKE ${q} ESCAPE '\\'
+        OR EXISTS (
+          SELECT 1 FROM vendor_prices vpq
+          WHERE vpq.product_id = pm.product_id
+            AND vpq.vendor_name ILIKE ${q} ESCAPE '\\'
+        )
+      )
+      AND (
+        ${vendor}::text IS NULL
+        OR EXISTS (
+          SELECT 1 FROM vendor_prices vpv
+          WHERE vpv.product_id = pm.product_id
+            AND vpv.vendor_name ILIKE ${vendor} ESCAPE '\\'
+        )
+      )
+    ORDER BY pm.product_name ASC, pm.spec ASC NULLS LAST, pm.product_maker ASC NULLS LAST
+    LIMIT ${params.pageSize}
+    OFFSET ${offset}
+  `;
+
+  const counts = await sql<{ count: string | number }[]>`
+    SELECT COUNT(*) AS "count"
+    FROM product_master pm
+    WHERE (${category}::text IS NULL OR pm.category = ${category})
+      AND (${productName}::text IS NULL OR pm.product_name ILIKE ${productName} ESCAPE '\\')
+      AND (
+        ${q}::text IS NULL
+        OR pm.product_name ILIKE ${q} ESCAPE '\\'
+        OR pm.spec ILIKE ${q} ESCAPE '\\'
+        OR pm.product_id::text ILIKE ${q} ESCAPE '\\'
+        OR EXISTS (SELECT 1 FROM vendor_prices vpq WHERE vpq.product_id = pm.product_id AND vpq.vendor_name ILIKE ${q} ESCAPE '\\')
+      )
+      AND (${vendor}::text IS NULL OR EXISTS (SELECT 1 FROM vendor_prices vpv WHERE vpv.product_id = pm.product_id AND vpv.vendor_name ILIKE ${vendor} ESCAPE '\\'))
+  `;
+
+  const ids = productIds.map((row) => row.productId);
+  if (ids.length === 0) {
+    return { category: params.category ?? "", vendors: [], rows: [], totalCount: Number(counts[0]?.count ?? 0), page: params.page, pageSize: params.pageSize };
+  }
+
+  const rows = await sql<GridRow[]>`
+    SELECT
+      pm.product_id AS "productId", pm.product_name AS "productName", pm.product_maker AS "productMaker",
+      pm.spec AS "spec", pm.category AS "category", pm.quality_flag AS "qualityFlag", pm.last_updated_at AS "lastUpdatedAt",
+      vp.vendor_price_id AS "vendorPriceId", vp.vendor_name AS "vendorName", vp.unit_price AS "unitPrice",
+      vp.price_updated_on AS "priceUpdatedOn", vp.updated_at AS "updatedAt"
+    FROM product_master pm
+    LEFT JOIN vendor_prices vp ON vp.product_id = pm.product_id
+    WHERE pm.product_id = ANY(${ids}::uuid[])
+    ORDER BY pm.product_name ASC, pm.spec ASC NULLS LAST, pm.product_maker ASC NULLS LAST, vp.vendor_name ASC
+  `;
+
+  const vendorNames = new Set<string>();
+  const rowMap = new Map<string, ProductSheetRow>();
+  for (const row of rows) {
+    if (!rowMap.has(row.productId)) {
+      rowMap.set(row.productId, { productId: row.productId, productName: row.productName, productMaker: row.productMaker, spec: row.spec, qualityFlag: row.qualityFlag, lastUpdatedAt: row.lastUpdatedAt, prices: {} });
+    }
+    if (row.vendorName && row.vendorPriceId && row.unitPrice != null) {
+      vendorNames.add(row.vendorName);
+      rowMap.get(row.productId)!.prices[row.vendorName] = { vendorPriceId: row.vendorPriceId, unitPrice: row.unitPrice, priceUpdatedOn: row.priceUpdatedOn, updatedAt: row.updatedAt };
+    }
+  }
+  return {
+    category: params.category ?? "",
+    vendors: Array.from(vendorNames).sort((a, b) => a.localeCompare(b, "ja")).map((vendorName) => ({ vendorName })),
+    rows: Array.from(rowMap.values()),
+    totalCount: Number(counts[0]?.count ?? 0),
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
 export async function updateProductSheetCells(
-  category: string,
+  category: string | null,
   payload: UpdateProductSheetCellsInput,
 ): Promise<{ batchId: string; changedCount: number; grid: ProductSheetGrid }> {
   const sql = getSql();
@@ -254,7 +365,7 @@ export async function updateProductSheetCells(
       FROM vendor_prices vp
       JOIN product_master pm ON pm.product_id = vp.product_id
       WHERE vp.vendor_price_id = ANY(${vendorPriceIds}::uuid[])
-        AND pm.category = ${category}
+        AND (${category}::text IS NULL OR pm.category = ${category})
       FOR UPDATE OF vp
     `;
 
@@ -354,6 +465,6 @@ export async function updateProductSheetCells(
   return {
     batchId,
     changedCount,
-    grid: await getProductSheetGrid(category),
+    grid: await searchProductSheetGrid({ category: category ?? undefined, q: undefined, productName: undefined, vendor: undefined, page: 1, pageSize: 50 }),
   };
 }

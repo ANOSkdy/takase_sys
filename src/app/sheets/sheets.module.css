@@ -1,0 +1,799 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+  min-height: 100vh;
+  padding: calc(64px + var(--space-4)) var(--space-6) var(--space-6);
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.headerText {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.headerText h1 {
+  margin: 0;
+}
+
+.headerText p,
+.emptyState,
+.meta {
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.secondaryLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  font-weight: 700;
+}
+
+.topScrollBar {
+  position: sticky;
+  top: calc(64px + var(--space-2));
+  z-index: 20;
+  display: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.topScrollBar[data-visible="true"] {
+  display: block;
+}
+
+.topScrollSpacer {
+  height: 1px;
+}
+
+.gridWrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.sheetTable {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.9rem;
+}
+
+.sheetTable th,
+.sheetTable td {
+  min-width: 132px;
+  max-width: 220px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.sheetTable th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--surface));
+  font-weight: 700;
+  text-align: left;
+}
+
+.sheetTable tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--color-base) 72%, var(--surface));
+}
+
+.sheetTable tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-secondary) 16%, var(--surface));
+}
+
+.stickyName {
+  min-width: 240px;
+  max-width: 280px;
+}
+
+.stickyMaker {
+  min-width: 140px;
+  max-width: 180px;
+}
+
+.stickySpec {
+  min-width: 180px;
+  max-width: 240px;
+}
+
+.priceCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheetTabs {
+  position: sticky;
+  bottom: 0;
+  z-index: 15;
+  display: flex;
+  gap: 1px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 4px var(--space-2);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+  box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.sheetTab {
+  display: block;
+  min-width: 96px;
+  max-width: 176px;
+  border: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--color-base) 70%, var(--surface));
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.sheetTab span {
+  display: block;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheetTabActive {
+  border-color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  background: var(--surface);
+  box-shadow: inset 0 3px 0 var(--color-primary);
+}
+
+.sheetTab:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.searchForm {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding-inline: var(--space-4);
+  }
+
+  .stickyName {
+    min-width: 180px;
+    max-width: 220px;
+  }
+
+  .sheetTabs {
+    padding-inline: var(--space-4);
+  }
+}
+
+.editToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.editActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-4);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: white;
+}
+
+.secondaryButton {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.cellButton {
+  display: block;
+  width: 100%;
+  min-width: 112px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cellButton:hover,
+.cellButton:focus-visible {
+  border-color: color-mix(in srgb, var(--color-primary) 44%, var(--border));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--surface));
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+
+.priceCellButton {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.errorMessage,
+.successMessage {
+  margin: 0;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-weight: 700;
+}
+
+.errorMessage {
+  border: 1px solid color-mix(in srgb, #dc2626 55%, var(--border));
+  background: color-mix(in srgb, #dc2626 10%, var(--surface));
+  color: #991b1b;
+}
+
+.successMessage {
+  border: 1px solid color-mix(in srgb, #16a34a 55%, var(--border));
+  background: color-mix(in srgb, #16a34a 10%, var(--surface));
+  color: #166534;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 24px 16px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.productDialog {
+  width: min(920px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.productDialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-6) var(--space-6) var(--space-4);
+}
+
+.productDialogHeader h2,
+.productDialogHeader p {
+  margin: 0;
+}
+
+.productDialogHeader h2 {
+  line-height: 1.25;
+}
+
+.productDialogHeader p {
+  margin-top: var(--space-2);
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-base) 72%, var(--surface));
+  color: var(--foreground);
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.productForm {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+.contextList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, var(--border));
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--surface));
+}
+
+.contextList div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contextList dt {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.contextList dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-weight: 700;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--space-4);
+}
+
+.productForm > .formGrid .formField:first-child {
+  grid-column: span 2;
+}
+
+.formField {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  font-weight: 700;
+}
+
+.formField input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 400;
+}
+
+.formField input:focus {
+  border-color: var(--color-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.formField input[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.fieldError {
+  color: #991b1b;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.vendorFieldset {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--border));
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--surface));
+}
+
+.vendorFieldset legend {
+  padding: 0 var(--space-2);
+  font-weight: 700;
+}
+
+.vendorFieldset .formField:first-child {
+  grid-column: auto;
+}
+
+.formActions {
+  position: sticky;
+  bottom: calc(-1 * var(--space-6));
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  margin: var(--space-1) calc(-1 * var(--space-6)) calc(-1 * var(--space-6));
+  padding: var(--space-4) var(--space-6);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
+}
+
+@media (max-width: 720px) {
+  .modalOverlay {
+    align-items: end;
+    padding: var(--space-2);
+  }
+
+  .productDialog {
+    width: min(100%, calc(100vw - var(--space-4)));
+    max-height: calc(100dvh - var(--space-4));
+  }
+
+  .productDialogHeader {
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .productForm {
+    gap: var(--space-4);
+    padding: var(--space-4);
+  }
+
+  .formGrid,
+  .productForm > .formGrid .formField:first-child {
+    grid-column: auto;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .vendorFieldset {
+    padding: var(--space-3);
+  }
+
+  .formActions {
+    bottom: calc(-1 * var(--space-4));
+    justify-content: stretch;
+    margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-4));
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .formActions button {
+    flex: 1 1 160px;
+  }
+}
+
+.sheetFormCard {
+  display: grid;
+  gap: var(--space-5);
+  width: min(100%, 960px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.formSection {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.formSectionHeader {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.formSectionHeader h2,
+.formSectionHeader p {
+  margin: 0;
+}
+
+.formSectionHeader p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.formActionsStatic {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-4);
+}
+
+@media (max-width: 720px) {
+  .sheetFormCard {
+    padding: var(--space-4);
+  }
+
+  .formActionsStatic {
+    justify-content: stretch;
+  }
+
+  .formActionsStatic a,
+  .formActionsStatic button {
+    flex: 1 1 160px;
+  }
+}
+
+.toolbarIntro {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.resultCount {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.sheetControls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex: 1 1 560px;
+  flex-wrap: wrap;
+}
+
+.searchField,
+.jumpField {
+  display: grid;
+  gap: 4px;
+  min-width: min(100%, 220px);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.searchField input,
+.jumpField select {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 400;
+}
+
+.searchField input:focus,
+.jumpField select:focus {
+  border-color: var(--color-primary);
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+
+.vendorControl {
+  position: relative;
+}
+
+.vendorPanel {
+  position: absolute;
+  right: 0;
+  z-index: 35;
+  display: grid;
+  gap: var(--space-3);
+  width: min(320px, calc(100vw - var(--space-6)));
+  max-height: 360px;
+  overflow: auto;
+  margin-top: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.vendorPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.textButton {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vendorCheckboxList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.vendorCheckbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+}
+
+.vendorCheckbox input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--color-primary);
+}
+
+.vendorPanelHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.vendorJumpHighlight {
+  background: color-mix(in srgb, var(--color-secondary) 36%, var(--surface)) !important;
+  box-shadow: inset 0 -3px 0 var(--color-primary);
+}
+
+.noResultCell {
+  min-width: 100% !important;
+  max-width: none !important;
+  padding: var(--space-6) !important;
+  color: var(--muted);
+  text-align: center;
+}
+
+.historyBlock {
+  display: grid;
+  gap: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 28%, var(--border));
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-secondary) 6%, var(--surface));
+}
+
+.historyBlock h3,
+.historyBlock p {
+  margin: 0;
+}
+
+.historyBlock h3 {
+  font-size: 1rem;
+}
+
+.historyBlock p {
+  color: var(--muted);
+}
+
+.historyList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historyList li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+  padding-bottom: var(--space-2);
+}
+
+.historyList li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.historyList time {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.historyList span {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.historyList small {
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--color-base) 70%, var(--surface));
+  color: var(--muted);
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .sheetControls {
+    justify-content: stretch;
+  }
+
+  .searchField,
+  .jumpField,
+  .sheetControls > button,
+  .vendorControl,
+  .vendorControl > button {
+    width: 100%;
+  }
+
+  .vendorPanel {
+    right: auto;
+    left: 0;
+    width: 100%;
+  }
+}
+
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--muted);
+}
+
+.pagination [aria-disabled="true"] {
+  pointer-events: none;
+  opacity: 0.5;
+}
