@@ -429,10 +429,9 @@ export default function DocumentsClient({
           <table style={tableStyle}>
             <colgroup>
               <col style={{ width: 44 }} />
-              <col style={{ width: 320 }} />
+              <col style={{ width: 420 }} />
               <col style={{ width: 170 }} />
               <col style={{ width: 120 }} />
-              <col style={{ width: 170 }} />
               <col style={{ width: 196 }} />
             </colgroup>
             <thead>
@@ -448,7 +447,6 @@ export default function DocumentsClient({
                 <Th>ファイル名</Th>
                 <Th>アップロード日時</Th>
                 <Th>ステータス</Th>
-                <Th>仕入先</Th>
                 <Th>操作</Th>
               </tr>
             </thead>
@@ -473,11 +471,6 @@ export default function DocumentsClient({
                   <Td muted>{formatDateTime(item.uploadedAt)}</Td>
                   <Td>
                     <StatusChip status={item.status} />
-                  </Td>
-                  <Td>
-                    <span style={textClampStyle} title={item.vendorName ?? "-"}>
-                      {item.vendorName ?? "-"}
-                    </span>
                   </Td>
                   <Td>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -509,7 +502,7 @@ export default function DocumentsClient({
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={5}
                     style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
                   >
                     まだアップロードされたPDFがありません。
@@ -820,8 +813,8 @@ const tableWrapperStyle: CSSProperties = {
 };
 
 const tableStyle: CSSProperties = {
-  width: 1300,
-  minWidth: 1300,
+  width: 950,
+  minWidth: 950,
   tableLayout: "fixed",
   borderCollapse: "separate",
   borderSpacing: 0,
@@ -861,20 +854,12 @@ const uploadFileNameStyle: CSSProperties = {
 
 const fileNameStyle: CSSProperties = {
   display: "inline-block",
-  maxWidth: 320,
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  maxWidth: "100%",
+  overflowWrap: "anywhere",
+  whiteSpace: "normal",
   verticalAlign: "top",
 };
 
-const textClampStyle: CSSProperties = {
-  display: "inline-block",
-  maxWidth: "100%",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
 
 const modalBackdrop: CSSProperties = {
   position: "fixed",

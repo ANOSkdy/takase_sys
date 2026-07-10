@@ -793,6 +793,9 @@
 .colName {
   min-width: 240px;
   max-width: 280px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .colMaker {
@@ -803,6 +806,9 @@
 .colSpec {
   min-width: 180px;
   max-width: 240px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .secondaryPanel {
