@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  attentionTextStyle,
+  ReviewStatusBadge,
+  SourceLink,
+} from "@/components/product/ReviewStatus";
+import { needsAttention } from "@/domain/review-status";
 import type { ProductSheetCategory, ProductSheetGrid } from "@/services/records/sheets";
 import styles from "./sheets.module.css";
 
@@ -1195,7 +1201,42 @@ export default function ProductSheetViewer({
                               rowIndex +
                               1}
                           </td>
-                          <td className={styles.colName}>{row.productName}</td>
+                          <td className={styles.colName}>
+                            <span style={attentionTextStyle(row.reviewStatus)}>
+                              {row.productName}
+                            </span>
+                            {(needsAttention(row.reviewStatus) || row.sourceSummary) && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: 6,
+                                  alignItems: "center",
+                                  marginTop: 2,
+                                }}
+                              >
+                                {needsAttention(row.reviewStatus) && (
+                                  <ReviewStatusBadge
+                                    status={row.reviewStatus}
+                                    reason={
+                                      row.reviewStatus === "NEEDS_REVIEW"
+                                        ? row.sourceSummary?.representative.attentionReason
+                                        : null
+                                    }
+                                  />
+                                )}
+                                {row.sourceSummary && (
+                                  <SourceLink
+                                    source={row.sourceSummary.representative}
+                                    sourceCount={row.sourceSummary.sourceCount}
+                                  />
+                                )}
+                                <a href={`/products/${row.productId}`} style={{ fontSize: 12 }}>
+                                  詳細
+                                </a>
+                              </div>
+                            )}
+                          </td>
                           <td className={styles.colMaker}>{row.productMaker ?? "-"}</td>
                           <td className={styles.colSpec}>{row.spec ?? "-"}</td>
                           {visibleVendors.map((vendor) => {

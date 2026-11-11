@@ -312,3 +312,36 @@ stagingは「原本保持」が目的のため、基本は削除しない（容�
 
 ::contentReference[oaicite:0]{index=0}
 ```
+
+---
+
+## 8. v3: 仮登録商品・出典・確認履歴
+
+- 投入SQL: `db/schema/v3_product_review.sql`（DDLのみ。本番は人が手動実行。再実行可能）
+- 適用確認: `pnpm db:verify`（読み取り専用。追加テーブル・列・制約の存在を確認）
+- 方針書: `docs/PROVISIONAL_PRODUCT_IMPLEMENTATION_PLAN.md`
+
+### 8.1 product_master 追加列
+
+| 列                       | 型          | 内容                                                                        |
+| ------------------------ | ----------- | --------------------------------------------------------------------------- |
+| `review_status`          | text        | `LEGACY` / `PROVISIONAL` / `NEEDS_REVIEW` / `VERIFIED` / `MERGED`（既定 `LEGACY`） |
+| `reviewed_at`            | timestamptz | 最新の確認操作の日時                                                        |
+| `reviewed_by`            | text        | 入力された確認者名（アプリ内認証がないため本人認証の証跡ではない）          |
+| `merged_into_product_id` | uuid        | 統合先。`MERGED` のときのみ必須（自分自身は不可）                           |
+
+- `LEGACY` は導入前の既存データであり、人が確認済みという意味ではない。
+- `quality_flag` は既存の品質情報として維持し、`review_status` と分けて扱う。
+- `MERGED` の商品は通常の検索・一覧・仕切り表から除外する。行は削除しない。
+
+### 8.2 product_document_sources
+
+商品と出典（PDF抽出明細）の紐付け。主キーは `line_item_id`（1明細の現在の紐付け先は1商品、1商品は複数出典を持てる）。
+
+- 出典PDFは `line_item_id → document_line_items.parse_run_id → document_parse_runs.document_id → documents` でたどる。URLは保存しない。
+- `link_method`: `PROVISIONAL_CREATE` / `EXACT_MATCH` / `MANUAL_LINK`
+- `match_candidates`: 照合時点の類似候補のスナップショット（確定した紐付けではない）
+
+### 8.3 product_review_history
+
+確認操作の履歴（`PROVISIONAL_CREATE` / `VERIFY` / `REQUEST_REVIEW` / `CORRECT` / `MERGE`）。変更前後を `before_snapshot` / `after_snapshot` に保存する。単価変更は従来どおり `update_history` にも保存する。

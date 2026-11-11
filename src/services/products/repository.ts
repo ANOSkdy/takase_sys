@@ -1,7 +1,9 @@
 import "server-only";
-import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, ne, or, type SQL } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { productMaster, updateHistory, vendorPrices } from "@/db/schema";
+import { toReviewStatus } from "@/domain/review-status";
+import { getProductSourceSummaries, listProductSources } from "@/services/products/sources";
 import type {
   ProductDetail,
   ProductListItem,
@@ -34,7 +36,8 @@ export type ProductListFilters = {
 
 export async function listProducts(filters: ProductListFilters = {}): Promise<ProductListItem[]> {
   const db = getDb();
-  const conditions = [];
+  // 統合済みは通常の一覧・検索・手動紐付け候補から除外する。
+  const conditions: (SQL | undefined)[] = [ne(productMaster.reviewStatus, "MERGED")];
 
   if (filters.keyword) {
     const keyword = `%${filters.keyword}%`;
@@ -74,16 +77,18 @@ export async function listProducts(filters: ProductListFilters = {}): Promise<Pr
       category: productMaster.category,
       defaultUnitPrice: productMaster.defaultUnitPrice,
       qualityFlag: productMaster.qualityFlag,
+      reviewStatus: productMaster.reviewStatus,
       lastUpdatedAt: productMaster.lastUpdatedAt,
     })
     .from(productMaster);
 
-  const filteredQuery = conditions.length ? baseQuery.where(and(...conditions)) : baseQuery;
+  const filteredQuery = baseQuery.where(and(...conditions));
   const orderedQuery = filteredQuery.orderBy(desc(productMaster.lastUpdatedAt));
   const limitedQuery = filters.limit ? orderedQuery.limit(filters.limit) : orderedQuery;
   const finalQuery = filters.offset ? limitedQuery.offset(filters.offset) : limitedQuery;
 
   const rows = await finalQuery;
+  const sourceSummaries = await getProductSourceSummaries(rows.map((row) => row.productId));
 
   return rows.map((row) => ({
     productId: row.productId,
@@ -93,7 +98,9 @@ export async function listProducts(filters: ProductListFilters = {}): Promise<Pr
     category: row.category ?? null,
     defaultUnitPrice: row.defaultUnitPrice ?? null,
     qualityFlag: row.qualityFlag,
+    reviewStatus: toReviewStatus(row.reviewStatus),
     lastUpdatedAt: toIsoString(row.lastUpdatedAt) ?? "",
+    sourceSummary: sourceSummaries.get(row.productId) ?? null,
   }));
 }
 
@@ -108,6 +115,10 @@ export async function getProductDetail(productId: string): Promise<ProductDetail
       category: productMaster.category,
       defaultUnitPrice: productMaster.defaultUnitPrice,
       qualityFlag: productMaster.qualityFlag,
+      reviewStatus: productMaster.reviewStatus,
+      reviewedAt: productMaster.reviewedAt,
+      reviewedBy: productMaster.reviewedBy,
+      mergedIntoProductId: productMaster.mergedIntoProductId,
       lastUpdatedAt: productMaster.lastUpdatedAt,
     })
     .from(productMaster)
@@ -115,6 +126,19 @@ export async function getProductDetail(productId: string): Promise<ProductDetail
     .limit(1);
 
   if (!product) return null;
+
+  // 統合済み商品へ直接アクセスされた場合に統合先を案内する。
+  let mergedInto: ProductDetail["mergedInto"] = null;
+  if (product.mergedIntoProductId) {
+    const [target] = await db
+      .select({ productId: productMaster.productId, productName: productMaster.productName })
+      .from(productMaster)
+      .where(eq(productMaster.productId, product.mergedIntoProductId))
+      .limit(1);
+    mergedInto = target ?? null;
+  }
+
+  const sources = await listProductSources(productId);
 
   const vendorRows = await db
     .select({
@@ -173,6 +197,11 @@ export async function getProductDetail(productId: string): Promise<ProductDetail
     category: product.category ?? null,
     defaultUnitPrice: product.defaultUnitPrice ?? null,
     qualityFlag: product.qualityFlag,
+    reviewStatus: toReviewStatus(product.reviewStatus),
+    reviewedAt: toIsoString(product.reviewedAt),
+    reviewedBy: product.reviewedBy ?? null,
+    mergedInto,
+    sources,
     lastUpdatedAt: toIsoString(product.lastUpdatedAt) ?? "",
     vendorPrices: vendorPricesList,
     updateHistory: updateHistoryList,

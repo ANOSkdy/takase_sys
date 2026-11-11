@@ -1,5 +1,10 @@
 import { headers } from "next/headers";
 import type { CSSProperties, ReactNode } from "react";
+import {
+  attentionTextStyle,
+  ReviewStatusBadge,
+  SourceLink,
+} from "@/components/product/ReviewStatus";
 import type { ProductListItem } from "@/services/products/types";
 
 export const runtime = "nodejs";
@@ -32,7 +37,10 @@ export default async function ProductsPage({
     <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
       <header style={{ display: "grid", gap: "var(--space-2)" }}>
         <h1 style={{ margin: 0 }}>商品マスタ</h1>
-        <p style={{ margin: 0, color: "var(--muted)" }}>PDF解析で自動生成された商品一覧です。</p>
+        <p style={{ margin: 0, color: "var(--muted)" }}>
+          商品一覧です。「⚠」の付いた商品はPDFから作成された未確認、または確認が必要な商品です。
+          統合済みの商品は表示されません。
+        </p>
       </header>
 
       <section style={cardStyle}>
@@ -55,6 +63,8 @@ export default async function ProductsPage({
                 <Th>商品キー</Th>
                 <Th>商品名</Th>
                 <Th>規格</Th>
+                <Th>確認状態</Th>
+                <Th>出典</Th>
                 <Th>品質</Th>
                 <Th>更新日</Th>
               </tr>
@@ -64,11 +74,34 @@ export default async function ProductsPage({
                 <tr key={item.productId}>
                   <Td muted>{item.productKey}</Td>
                   <Td>
-                    <a href={`/products/${item.productId}`} style={linkStyle}>
+                    <a
+                      href={`/products/${item.productId}`}
+                      style={{ ...linkStyle, ...attentionTextStyle(item.reviewStatus) }}
+                    >
                       {item.productName}
                     </a>
                   </Td>
                   <Td muted>{item.spec ?? "-"}</Td>
+                  <Td>
+                    <ReviewStatusBadge
+                      status={item.reviewStatus}
+                      reason={
+                        item.reviewStatus === "NEEDS_REVIEW"
+                          ? item.sourceSummary?.representative.attentionReason
+                          : null
+                      }
+                    />
+                  </Td>
+                  <Td muted>
+                    {item.sourceSummary ? (
+                      <SourceLink
+                        source={item.sourceSummary.representative}
+                        sourceCount={item.sourceSummary.sourceCount}
+                      />
+                    ) : (
+                      "-"
+                    )}
+                  </Td>
                   <Td muted>{item.qualityFlag}</Td>
                   <Td muted>{item.lastUpdatedAt.slice(0, 10)}</Td>
                 </tr>
@@ -76,7 +109,7 @@ export default async function ProductsPage({
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={7}
                     style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
                   >
                     まだ商品がありません。

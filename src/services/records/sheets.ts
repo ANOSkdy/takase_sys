@@ -1,6 +1,9 @@
 import "server-only";
 import { z } from "zod";
 import { getSql } from "@/db/client";
+import { toReviewStatus, type ReviewStatus } from "@/domain/review-status";
+import { getProductSourceSummaries } from "@/services/products/sources";
+import type { ProductSourceSummary } from "@/services/products/types";
 
 const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
 const maxChangedCells = 500;
@@ -83,6 +86,9 @@ export type ProductSheetRow = {
   productMaker: string | null;
   spec: string | null;
   qualityFlag: string;
+  reviewStatus: ReviewStatus;
+  /** 代表出典と出典件数。出典のない商品は null。 */
+  sourceSummary: ProductSourceSummary | null;
   lastUpdatedAt: string | Date | null;
   prices: Record<string, ProductSheetPrice>;
 };
@@ -130,6 +136,7 @@ type GridRow = {
   spec: string | null;
   category: string | null;
   qualityFlag: string;
+  reviewStatus: string;
   lastUpdatedAt: string | Date | null;
   vendorPriceId: string | null;
   vendorName: string | null;
@@ -171,6 +178,7 @@ export async function listProductSheetCategories(): Promise<ProductSheetCategory
     FROM product_master pm
     LEFT JOIN vendor_prices vp ON vp.product_id = pm.product_id
     WHERE pm.category IS NOT NULL AND BTRIM(pm.category) <> ''
+      AND pm.review_status <> 'MERGED'
     GROUP BY pm.category
     ORDER BY pm.category ASC
   `;
@@ -192,6 +200,7 @@ export async function getProductSheetGrid(category: string): Promise<ProductShee
       pm.spec AS "spec",
       pm.category AS "category",
       pm.quality_flag AS "qualityFlag",
+      pm.review_status AS "reviewStatus",
       pm.last_updated_at AS "lastUpdatedAt",
       vp.vendor_price_id AS "vendorPriceId",
       vp.vendor_name AS "vendorName",
@@ -201,6 +210,7 @@ export async function getProductSheetGrid(category: string): Promise<ProductShee
     FROM product_master pm
     LEFT JOIN vendor_prices vp ON vp.product_id = pm.product_id
     WHERE pm.category = ${category}
+      AND pm.review_status <> 'MERGED'
     ORDER BY
       pm.product_name ASC,
       pm.spec ASC NULLS LAST,
@@ -219,6 +229,8 @@ export async function getProductSheetGrid(category: string): Promise<ProductShee
         productMaker: row.productMaker,
         spec: row.spec,
         qualityFlag: row.qualityFlag,
+        reviewStatus: toReviewStatus(row.reviewStatus),
+        sourceSummary: null,
         lastUpdatedAt: row.lastUpdatedAt,
         prices: {},
       });
@@ -238,6 +250,8 @@ export async function getProductSheetGrid(category: string): Promise<ProductShee
     }
   }
 
+  await attachSourceSummaries(rowMap);
+
   return {
     category,
     vendors: Array.from(vendorNames)
@@ -247,6 +261,14 @@ export async function getProductSheetGrid(category: string): Promise<ProductShee
   };
 }
 
+
+async function attachSourceSummaries(rowMap: Map<string, ProductSheetRow>) {
+  const summaries = await getProductSourceSummaries(Array.from(rowMap.keys()));
+  for (const [productId, summary] of summaries) {
+    const row = rowMap.get(productId);
+    if (row) row.sourceSummary = summary;
+  }
+}
 
 function likePattern(value: string) {
   return `%${value.replace(/([%_\\])/g, "\\$1")}%`;
@@ -265,7 +287,8 @@ export async function searchProductSheetGrid(
   const productIds = await sql<{ productId: string }[]>`
     SELECT pm.product_id AS "productId"
     FROM product_master pm
-    WHERE (${category}::text IS NULL OR pm.category = ${category})
+    WHERE pm.review_status <> 'MERGED'
+      AND (${category}::text IS NULL OR pm.category = ${category})
       AND (${productName}::text IS NULL OR pm.product_name ILIKE ${productName} ESCAPE '\\')
       AND (
         ${q}::text IS NULL
@@ -294,7 +317,8 @@ export async function searchProductSheetGrid(
   const counts = await sql<{ count: string | number }[]>`
     SELECT COUNT(*) AS "count"
     FROM product_master pm
-    WHERE (${category}::text IS NULL OR pm.category = ${category})
+    WHERE pm.review_status <> 'MERGED'
+      AND (${category}::text IS NULL OR pm.category = ${category})
       AND (${productName}::text IS NULL OR pm.product_name ILIKE ${productName} ESCAPE '\\')
       AND (
         ${q}::text IS NULL
@@ -314,7 +338,7 @@ export async function searchProductSheetGrid(
   const rows = await sql<GridRow[]>`
     SELECT
       pm.product_id AS "productId", pm.product_name AS "productName", pm.product_maker AS "productMaker",
-      pm.spec AS "spec", pm.category AS "category", pm.quality_flag AS "qualityFlag", pm.last_updated_at AS "lastUpdatedAt",
+      pm.spec AS "spec", pm.category AS "category", pm.quality_flag AS "qualityFlag", pm.review_status AS "reviewStatus", pm.last_updated_at AS "lastUpdatedAt",
       vp.vendor_price_id AS "vendorPriceId", vp.vendor_name AS "vendorName", vp.unit_price AS "unitPrice",
       vp.price_updated_on AS "priceUpdatedOn", vp.updated_at AS "updatedAt"
     FROM product_master pm
@@ -327,13 +351,14 @@ export async function searchProductSheetGrid(
   const rowMap = new Map<string, ProductSheetRow>();
   for (const row of rows) {
     if (!rowMap.has(row.productId)) {
-      rowMap.set(row.productId, { productId: row.productId, productName: row.productName, productMaker: row.productMaker, spec: row.spec, qualityFlag: row.qualityFlag, lastUpdatedAt: row.lastUpdatedAt, prices: {} });
+      rowMap.set(row.productId, { productId: row.productId, productName: row.productName, productMaker: row.productMaker, spec: row.spec, qualityFlag: row.qualityFlag, reviewStatus: toReviewStatus(row.reviewStatus), sourceSummary: null, lastUpdatedAt: row.lastUpdatedAt, prices: {} });
     }
     if (row.vendorName && row.vendorPriceId && row.unitPrice != null) {
       vendorNames.add(row.vendorName);
       rowMap.get(row.productId)!.prices[row.vendorName] = { vendorPriceId: row.vendorPriceId, unitPrice: row.unitPrice, priceUpdatedOn: row.priceUpdatedOn, updatedAt: row.updatedAt };
     }
   }
+  await attachSourceSummaries(rowMap);
   return {
     category: params.category ?? "",
     vendors: Array.from(vendorNames).sort((a, b) => a.localeCompare(b, "ja")).map((vendorName) => ({ vendorName })),
