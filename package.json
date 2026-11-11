@@ -21,6 +21,7 @@
     "db:migrate": "node scripts/db/migrate.mjs",
     "db:deploy": "node scripts/db/verify-schema.mjs",
     "db:verify": "node scripts/db/verify-schema.mjs",
+    "db:migrate-provisional": "tsx scripts/db/migrate-provisional-products.ts",
     "vercel-build": "node scripts/vercel-build.mjs"
   },
   "dependencies": {
