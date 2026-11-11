@@ -28,6 +28,7 @@ import {
 } from "@/domain/provisional-product";
 import { toReviewStatus, type ReviewStatus } from "@/domain/review-status";
 import { shouldBlockUpdate } from "@/domain/update-policy";
+import { findSimilarProducts, toMatchCandidateSnapshot } from "@/services/products/candidates";
 import { getStorageProvider } from "@/services/storage";
 import { parseInvoiceFromPdf } from "@/services/ai/gemini";
 import type { ParsedInvoice } from "@/services/ai/schema";
@@ -904,6 +905,17 @@ export async function persistParseResult<H extends PgQueryResultHKT>(
               .returning({ lineItemId: productDocumentSources.lineItemId })
           : [];
         if (repointed.length === 0) {
+          // 仮登録時は、照合時点の類似候補を残す（確定した紐付けではなく、確認時の参考）。
+          const matchCandidates = wasCreated
+            ? toMatchCandidateSnapshot(
+                await findSimilarProducts(tx, {
+                  productId: matchedProductId,
+                  productName: context.productNameRaw,
+                  productMaker: context.productMaker,
+                  spec: context.specRaw,
+                }),
+              )
+            : [];
           await tx
             .insert(productDocumentSources)
             .values({
@@ -912,6 +924,7 @@ export async function persistParseResult<H extends PgQueryResultHKT>(
               linkedBy: SYSTEM_REVIEWER,
               linkMethod: wasCreated ? "PROVISIONAL_CREATE" : "EXACT_MATCH",
               attentionReason,
+              matchCandidates,
             })
             .onConflictDoNothing({ target: productDocumentSources.lineItemId });
         }

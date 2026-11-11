@@ -423,6 +423,29 @@ describe("persistParseResult with provisional creation enabled", () => {
     expect(await diffs(run)).toMatchObject([{ classification: "UPDATE" }]);
   });
 
+  it("saves a snapshot of similar products when it creates a provisional product", async () => {
+    const similar = await addProduct({
+      key: "別キー",
+      name: "ウェザータイト(防水部材)",
+      spec: "パイプ用 100φ WTP100 □205mm",
+      maker: MAKER,
+      status: "VERIFIED",
+    });
+
+    await parse(await addDocument(), invoice([line()]));
+
+    const [source] = await t.rows<{
+      match_candidates: { productId: string; differingFields: string[] }[];
+    }>(`SELECT match_candidates FROM product_document_sources`);
+    expect(source.match_candidates).toHaveLength(1);
+    expect(source.match_candidates[0].productId).toBe(similar);
+    expect(source.match_candidates[0].differingFields).toContain(
+      "口径・寸法（150φ 255mm ／ 100φ 205mm）",
+    );
+    // 候補があっても自動統合はしない。
+    expect(await products()).toHaveLength(2);
+  });
+
   it("rolls everything back when saving fails part-way", async () => {
     const doc = await addDocument();
     // 行番号の重複は明細の一意制約に違反する（商品作成の後で失敗する）。
