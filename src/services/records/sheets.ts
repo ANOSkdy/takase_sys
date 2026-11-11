@@ -103,10 +103,30 @@ export type ProductSheetGrid = {
 };
 
 export const productSheetsSearchSchema = z.object({
-  category: z.string().trim().max(200).optional().transform((v) => (v ? v : undefined)),
-  q: z.string().trim().max(200).optional().transform((v) => (v ? v : undefined)),
-  productName: z.string().trim().max(300).optional().transform((v) => (v ? v : undefined)),
-  vendor: z.string().trim().max(200).optional().transform((v) => (v ? v : undefined)),
+  category: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  q: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  productName: z
+    .string()
+    .trim()
+    .max(300)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+  vendor: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
@@ -261,7 +281,6 @@ export async function getProductSheetGrid(category: string): Promise<ProductShee
   };
 }
 
-
 async function attachSourceSummaries(rowMap: Map<string, ProductSheetRow>) {
   const summaries = await getProductSourceSummaries(Array.from(rowMap.keys()));
   for (const [productId, summary] of summaries) {
@@ -332,7 +351,14 @@ export async function searchProductSheetGrid(
 
   const ids = productIds.map((row) => row.productId);
   if (ids.length === 0) {
-    return { category: params.category ?? "", vendors: [], rows: [], totalCount: Number(counts[0]?.count ?? 0), page: params.page, pageSize: params.pageSize };
+    return {
+      category: params.category ?? "",
+      vendors: [],
+      rows: [],
+      totalCount: Number(counts[0]?.count ?? 0),
+      page: params.page,
+      pageSize: params.pageSize,
+    };
   }
 
   const rows = await sql<GridRow[]>`
@@ -351,17 +377,34 @@ export async function searchProductSheetGrid(
   const rowMap = new Map<string, ProductSheetRow>();
   for (const row of rows) {
     if (!rowMap.has(row.productId)) {
-      rowMap.set(row.productId, { productId: row.productId, productName: row.productName, productMaker: row.productMaker, spec: row.spec, qualityFlag: row.qualityFlag, reviewStatus: toReviewStatus(row.reviewStatus), sourceSummary: null, lastUpdatedAt: row.lastUpdatedAt, prices: {} });
+      rowMap.set(row.productId, {
+        productId: row.productId,
+        productName: row.productName,
+        productMaker: row.productMaker,
+        spec: row.spec,
+        qualityFlag: row.qualityFlag,
+        reviewStatus: toReviewStatus(row.reviewStatus),
+        sourceSummary: null,
+        lastUpdatedAt: row.lastUpdatedAt,
+        prices: {},
+      });
     }
     if (row.vendorName && row.vendorPriceId && row.unitPrice != null) {
       vendorNames.add(row.vendorName);
-      rowMap.get(row.productId)!.prices[row.vendorName] = { vendorPriceId: row.vendorPriceId, unitPrice: row.unitPrice, priceUpdatedOn: row.priceUpdatedOn, updatedAt: row.updatedAt };
+      rowMap.get(row.productId)!.prices[row.vendorName] = {
+        vendorPriceId: row.vendorPriceId,
+        unitPrice: row.unitPrice,
+        priceUpdatedOn: row.priceUpdatedOn,
+        updatedAt: row.updatedAt,
+      };
     }
   }
   await attachSourceSummaries(rowMap);
   return {
     category: params.category ?? "",
-    vendors: Array.from(vendorNames).sort((a, b) => a.localeCompare(b, "ja")).map((vendorName) => ({ vendorName })),
+    vendors: Array.from(vendorNames)
+      .sort((a, b) => a.localeCompare(b, "ja"))
+      .map((vendorName) => ({ vendorName })),
     rows: Array.from(rowMap.values()),
     totalCount: Number(counts[0]?.count ?? 0),
     page: params.page,
@@ -490,6 +533,13 @@ export async function updateProductSheetCells(
   return {
     batchId,
     changedCount,
-    grid: await searchProductSheetGrid({ category: category ?? undefined, q: undefined, productName: undefined, vendor: undefined, page: 1, pageSize: 50 }),
+    grid: await searchProductSheetGrid({
+      category: category ?? undefined,
+      q: undefined,
+      productName: undefined,
+      vendor: undefined,
+      page: 1,
+      pageSize: 50,
+    }),
   };
 }
