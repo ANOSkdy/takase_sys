@@ -1,21 +1,36 @@
 import "server-only";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
+import type * as schema from "@/db/schema";
 import {
   documentDiffItems,
   documentLineItems,
   documentParseRuns,
   documents,
+  productDocumentSources,
   productMaster,
+  productReviewHistory,
   updateHistory,
   vendorPrices,
 } from "@/db/schema";
 import { getEnv } from "@/config/env";
 import { normalizeText, makeProductKey } from "@/domain/normalize";
 import { safeParseFloat, toNumericString } from "@/domain/pg-numeric";
+import {
+  canCreateProvisionalProduct,
+  collectAttentionReasons,
+  decideUnverifiedPriceAction,
+  formatAttentionReason,
+  isAutoUpdatableStatus,
+  makersConflict,
+  SYSTEM_REVIEWER,
+} from "@/domain/provisional-product";
+import { toReviewStatus, type ReviewStatus } from "@/domain/review-status";
 import { shouldBlockUpdate } from "@/domain/update-policy";
 import { getStorageProvider } from "@/services/storage";
 import { parseInvoiceFromPdf } from "@/services/ai/gemini";
+import type { ParsedInvoice } from "@/services/ai/schema";
 import { assertSinglePagePdf } from "@/services/documents/parse-guard";
 import { PROMPT_VERSION } from "@/services/ai/prompt";
 
@@ -50,6 +65,53 @@ type LineItemContext = {
   matchedProductId: string | null;
   matchedProductSpec: string | null;
   matchedProductCategory: string | null;
+  matchedReviewStatus: ReviewStatus | null;
+  resolution: LineResolution;
+  /** 同じ書類・同じ行の過去の解析で作られた出典。再解析時に付け替える。 */
+  priorSourceLineItemId: string | null;
+  /** 商品キーが統合済み商品に一致した場合の統合元と統合先。 */
+  mergedProductId: string | null;
+  mergeTargetProductId: string | null;
+  quantityNum: number | null;
+  unitPriceNum: number | null;
+  amountNum: number | null;
+};
+
+/**
+ * 明細と商品の対応付けの結果。
+ * - SOURCE: 同じ書類・同じ行の出典紐付け（人による修正・統合を含む）を引き継いだ
+ * - EXACT: 統合済みを除く商品キーの完全一致
+ * - CREATED: この解析で仮登録した
+ * - MERGED_KEY: 商品キーが統合済み商品に一致した（再使用も新規作成もしない）
+ * - NONE: 対応する商品なし
+ */
+type LineResolution = "SOURCE" | "EXACT" | "CREATED" | "MERGED_KEY" | "NONE";
+
+type ProductInfo = {
+  productId: string;
+  productKey: string;
+  productMaker: string | null;
+  productName: string;
+  spec: string | null;
+  category: string | null;
+  reviewStatus: ReviewStatus;
+  mergedIntoProductId: string | null;
+};
+
+const MAX_MERGE_HOPS = 5;
+
+type ParseDb<H extends PgQueryResultHKT> = PgDatabase<H, typeof schema>;
+
+export type PersistParseResultInput = {
+  documentId: string;
+  parseRunId: string;
+  invoiceData: ParsedInvoice;
+  /**
+   * true のとき、既存商品に一致しない明細を仮登録し、出典と確認履歴を保存する。
+   * false のときは従来どおり新規商品候補（NEW_CANDIDATE）として差分に残すだけ。
+   * 統合済みの除外や未確認商品の保護は、この値にかかわらず常に働く。
+   */
+  provisionalCreateEnabled: boolean;
 };
 
 type VendorPriceRow = {
@@ -92,6 +154,7 @@ function buildLineItemRow(input: LineItemContext & { parseRunId: string }): Line
     lineItemId: input.lineItemId,
     parseRunId: input.parseRunId,
     lineNo: input.lineNo,
+    productMaker: input.productMaker,
     productNameRaw: input.productNameRaw,
     specRaw: input.specRaw,
     productKeyCandidate: input.productKeyCandidate,
@@ -363,6 +426,32 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
     throw new Error(noLineItemsErrorCode);
   }
 
+  await persistParseResult(db, {
+    documentId,
+    parseRunId,
+    invoiceData,
+    provisionalCreateEnabled: isProvisionalCreateEnabled(env.ENABLE_PROVISIONAL_PRODUCTS),
+  });
+
+  return { parseRunId, status: "SUCCEEDED" };
+}
+
+export function isProvisionalCreateEnabled(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return normalized === "1" || normalized === "true";
+}
+
+/**
+ * 解析結果を1トランザクションで保存する。
+ * 商品・仕入先単価・出典・確認履歴・差分のどれかが失敗した場合は全体を取り消す。
+ */
+export async function persistParseResult<H extends PgQueryResultHKT>(
+  db: ParseDb<H>,
+  input: PersistParseResultInput,
+): Promise<void> {
+  const { documentId, parseRunId, invoiceData, provisionalCreateEnabled } = input;
+  const pageCount = 1;
+  const rawLineItemCount = invoiceData.lineItems.length;
   const vendorName = invoiceData.vendorName ? normalizeText(invoiceData.vendorName) : null;
   const invoiceDate =
     invoiceData.invoiceDate && dateRegex.test(invoiceData.invoiceDate)
@@ -370,6 +459,63 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       : null;
 
   await db.transaction(async (tx) => {
+    // 同じ書類の解析結果の保存を直列化する（再送・並行実行で出典を二重に付け替えない）。
+    await tx
+      .select({ documentId: documents.documentId })
+      .from(documents)
+      .where(eq(documents.documentId, documentId))
+      .for("update");
+
+    const productColumns = {
+      productId: productMaster.productId,
+      productKey: productMaster.productKey,
+      productMaker: productMaster.productMaker,
+      productName: productMaster.productName,
+      spec: productMaster.spec,
+      category: productMaster.category,
+      reviewStatus: productMaster.reviewStatus,
+      mergedIntoProductId: productMaster.mergedIntoProductId,
+    };
+    type ProductDbRow = {
+      productId: string;
+      productKey: string;
+      productMaker: string | null;
+      productName: string;
+      spec: string | null;
+      category: string | null;
+      reviewStatus: string;
+      mergedIntoProductId: string | null;
+    };
+    const toProductInfo = (row: ProductDbRow): ProductInfo => ({
+      productId: row.productId,
+      productKey: row.productKey,
+      productMaker: row.productMaker ?? null,
+      productName: row.productName,
+      spec: row.spec ?? null,
+      category: row.category ?? null,
+      reviewStatus: toReviewStatus(row.reviewStatus),
+      mergedIntoProductId: row.mergedIntoProductId ?? null,
+    });
+    const getProductById = async (productId: string): Promise<ProductInfo | null> => {
+      const [row] = await tx
+        .select(productColumns)
+        .from(productMaster)
+        .where(eq(productMaster.productId, productId))
+        .limit(1);
+      return row ? toProductInfo(row) : null;
+    };
+    /** 統合済みなら統合先をたどり、統合済みでない商品を返す。循環や欠落は null。 */
+    const resolveActiveProduct = async (productId: string): Promise<ProductInfo | null> => {
+      let currentId: string | null = productId;
+      for (let hop = 0; hop <= MAX_MERGE_HOPS && currentId; hop += 1) {
+        const product = await getProductById(currentId);
+        if (!product) return null;
+        if (product.reviewStatus !== "MERGED") return product;
+        currentId = product.mergedIntoProductId;
+      }
+      return null;
+    };
+
     const productKeySet = new Set<string>();
     invoiceData.lineItems.forEach((item) => {
       const productMaker = item.productMaker ? normalizeText(item.productMaker) : null;
@@ -388,61 +534,79 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
 
     const productRows = productKeys.length
       ? await tx
-          .select({
-            productId: productMaster.productId,
-            productKey: productMaster.productKey,
-            productMaker: productMaster.productMaker,
-            productName: productMaster.productName,
-            spec: productMaster.spec,
-            category: productMaster.category,
-            defaultUnitPrice: productMaster.defaultUnitPrice,
-            qualityFlag: productMaster.qualityFlag,
-          })
+          .select(productColumns)
           .from(productMaster)
           .orderBy(desc(productMaster.lastUpdatedAt), asc(productMaster.productId))
           .where(inArray(productMaster.productKey, productKeys))
       : [];
 
-    const productMap = new Map<
-      string,
-      {
-        productId: string;
-        productKey: string;
-        productMaker: string | null;
-        productName: string;
-        spec: string | null;
-        category: string | null;
-        defaultUnitPrice: string | null;
-        qualityFlag: string;
-      }
-    >();
+    // 統合済み商品は自動照合の対象にしない。キーが一致した場合の案内用に別で保持する。
+    const productMap = new Map<string, ProductInfo>();
+    const mergedMap = new Map<string, ProductInfo>();
     for (const row of productRows) {
-      if (productMap.has(row.productKey)) continue;
-      productMap.set(row.productKey, {
-        productId: row.productId,
-        productKey: row.productKey,
-        productMaker: row.productMaker ?? null,
-        productName: row.productName,
-        spec: row.spec ?? null,
-        category: row.category ?? null,
-        defaultUnitPrice: row.defaultUnitPrice ?? null,
-        qualityFlag: row.qualityFlag,
-      });
+      const info = toProductInfo(row);
+      const target = info.reviewStatus === "MERGED" ? mergedMap : productMap;
+      if (!target.has(info.productKey)) target.set(info.productKey, info);
     }
+
+    // 同じ書類の過去の解析で作られた出典紐付け。人が修正・統合した結果を
+    // 再解析で元に戻さないよう、商品キーの照合より優先する。
+    const priorSourceRows = await tx
+      .select({
+        lineItemId: productDocumentSources.lineItemId,
+        productId: productDocumentSources.productId,
+        lineNo: documentLineItems.lineNo,
+        productKeyCandidate: documentLineItems.productKeyCandidate,
+      })
+      .from(productDocumentSources)
+      .innerJoin(
+        documentLineItems,
+        eq(productDocumentSources.lineItemId, documentLineItems.lineItemId),
+      )
+      .innerJoin(documentParseRuns, eq(documentLineItems.parseRunId, documentParseRuns.parseRunId))
+      .where(eq(documentParseRuns.documentId, documentId))
+      .orderBy(desc(productDocumentSources.linkedAt));
+
+    const priorSourceKey = (lineNo: number, productKey: string) => `${lineNo}\u0000${productKey}`;
+    const priorSourceMap = new Map<string, { lineItemId: string; product: ProductInfo }>();
+    for (const row of priorSourceRows) {
+      if (!row.productKeyCandidate) continue;
+      const key = priorSourceKey(row.lineNo, row.productKeyCandidate);
+      if (priorSourceMap.has(key)) continue;
+      const product = await resolveActiveProduct(row.productId);
+      if (product) priorSourceMap.set(key, { lineItemId: row.lineItemId, product });
+    }
+
+    const resolveMergedKey = async (
+      merged: ProductInfo,
+    ): Promise<
+      Pick<LineItemContext, "resolution" | "mergedProductId" | "mergeTargetProductId">
+    > => {
+      const target = await resolveActiveProduct(merged.productId);
+      return {
+        resolution: "MERGED_KEY",
+        mergedProductId: merged.productId,
+        mergeTargetProductId: target?.productId ?? null,
+      };
+    };
 
     const lineContexts: LineItemContext[] = [];
 
-    invoiceData.lineItems.forEach((item, index) => {
+    for (const [index, item] of invoiceData.lineItems.entries()) {
       const productMaker = item.productMaker ? normalizeText(item.productMaker) : null;
       const productNameRaw = sanitizeProductName({
         productName: item.productName ?? "",
         productMaker,
       });
-      if (!productNameRaw) return;
+      if (!productNameRaw) continue;
       const specRaw = item.spec ? normalizeText(item.spec) : null;
       const productKeyCandidate = makeProductKey(productNameRaw, specRaw, productMaker);
       const legacyProductKeyCandidate = makeProductKey(productNameRaw, specRaw);
-      if (!productKeyCandidate) return;
+      if (!productKeyCandidate) continue;
+      const lineNo = item.lineNo ?? index + 1;
+      const quantityNum = safeParseFloat(item.quantity);
+      const unitPriceNum = safeParseFloat(item.unitPrice);
+      const amountNum = safeParseFloat(item.amount);
       const quantity = toNumericString(item.quantity, 3);
       const unitPrice = toNumericString(item.unitPrice, 2);
       const amount = toNumericString(item.amount, 2);
@@ -450,18 +614,35 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       const modelConfidence = toNumericString(modelConfidenceNum, 3);
       const systemConfidenceNum = computeSystemConfidence({
         modelConfidence: modelConfidenceNum,
-        quantity: safeParseFloat(item.quantity),
-        unitPrice: safeParseFloat(item.unitPrice),
-        amount: safeParseFloat(item.amount),
+        quantity: quantityNum,
+        unitPrice: unitPriceNum,
+        amount: amountNum,
         productName: productNameRaw,
         spec: specRaw,
       });
       const systemConfidence = toNumericString(systemConfidenceNum, 3);
+
+      // 1) 同じ書類・同じ行の出典紐付け  2) 統合済みを除く商品キーの完全一致
+      // 旧形式キー（メーカーなし）での一致は、メーカーが矛盾する場合は採用しない。
+      const priorSource = priorSourceMap.get(priorSourceKey(lineNo, productKeyCandidate)) ?? null;
+      const legacyMatch = (map: Map<string, ProductInfo>) => {
+        const candidate = map.get(legacyProductKeyCandidate);
+        return candidate && !makersConflict(productMaker, candidate.productMaker)
+          ? candidate
+          : undefined;
+      };
       const matched =
-        productMap.get(productKeyCandidate) ?? productMap.get(legacyProductKeyCandidate);
+        priorSource?.product ?? productMap.get(productKeyCandidate) ?? legacyMatch(productMap);
+      const mergedKeyMatch = matched
+        ? undefined
+        : (mergedMap.get(productKeyCandidate) ?? legacyMatch(mergedMap));
+      const unmatched = mergedKeyMatch
+        ? await resolveMergedKey(mergedKeyMatch)
+        : { resolution: "NONE" as const, mergedProductId: null, mergeTargetProductId: null };
+
       lineContexts.push({
         lineItemId: crypto.randomUUID(),
-        lineNo: item.lineNo ?? index + 1,
+        lineNo,
         productMaker,
         productNameRaw,
         specRaw,
@@ -476,8 +657,20 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         matchedProductId: matched?.productId ?? null,
         matchedProductSpec: matched?.spec ?? null,
         matchedProductCategory: matched?.category ?? null,
+        matchedReviewStatus: matched?.reviewStatus ?? null,
+        ...(matched
+          ? {
+              resolution: priorSource ? ("SOURCE" as const) : ("EXACT" as const),
+              mergedProductId: null,
+              mergeTargetProductId: null,
+            }
+          : unmatched),
+        priorSourceLineItemId: priorSource?.lineItemId ?? null,
+        quantityNum,
+        unitPriceNum,
+        amountNum,
       });
-    });
+    }
 
     console.info("document_parse_normalized", {
       documentId,
@@ -507,6 +700,75 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         .set({ status: "FAILED", parseErrorSummary: noUsableLineItemsSummary })
         .where(eq(documents.documentId, documentId));
       return;
+    }
+
+    // 仮登録: 既存商品に一致せず、条件を満たす明細から未確認の商品を作成する。
+    // 商品キーの一意制約に任せ、競合した場合は既存行を再取得して照合し直す。
+    const createdProductIds = new Set<string>();
+    if (provisionalCreateEnabled) {
+      for (const context of lineContexts) {
+        if (context.resolution !== "NONE") continue;
+        if (!canCreateProvisionalProduct(context.systemConfidenceNum)) continue;
+
+        const applyMatch = (product: ProductInfo, resolution: LineResolution) => {
+          context.matchedProductId = product.productId;
+          context.matchedProductSpec = product.spec;
+          context.matchedProductCategory = product.category;
+          context.matchedReviewStatus = product.reviewStatus;
+          context.resolution = resolution;
+        };
+
+        // 同じ解析内の別明細で作成・照合済みの商品は、同じ商品へ出典を追加する。
+        const known = productMap.get(context.productKeyCandidate);
+        if (known) {
+          applyMatch(known, "EXACT");
+          continue;
+        }
+
+        const now = new Date();
+        const [created] = await tx
+          .insert(productMaster)
+          .values({
+            productId: crypto.randomUUID(),
+            productKey: context.productKeyCandidate,
+            productMaker: context.productMaker,
+            productName: context.productNameRaw,
+            spec: context.specRaw,
+            // カテゴリは推測しない（「未分類」も付けない）。確認時に人が設定する。
+            category: null,
+            qualityFlag: "OK",
+            lastUpdatedAt: now,
+            lastSourceType: "PDF",
+            lastSourceId: parseRunId,
+            // DB既定値（LEGACY）に任せず、未確認であることを明示する。
+            reviewStatus: "PROVISIONAL",
+          })
+          .onConflictDoNothing({ target: productMaster.productKey })
+          .returning(productColumns);
+
+        if (created) {
+          const info = toProductInfo(created);
+          productMap.set(info.productKey, info);
+          createdProductIds.add(info.productId);
+          applyMatch(info, "CREATED");
+          continue;
+        }
+
+        // 並行する解析などが同じキーを先に登録した。作り直さず既存行を使う。
+        const [existing] = await tx
+          .select(productColumns)
+          .from(productMaster)
+          .where(eq(productMaster.productKey, context.productKeyCandidate))
+          .limit(1);
+        if (!existing) continue;
+        const info = toProductInfo(existing);
+        if (info.reviewStatus === "MERGED") {
+          Object.assign(context, await resolveMergedKey(info));
+        } else {
+          productMap.set(info.productKey, info);
+          applyMatch(info, "EXACT");
+        }
+      }
     }
 
     const lineItemRows = lineContexts.map((context) =>
@@ -558,9 +820,31 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
         amount: context.amount,
       };
 
+      if (!context.matchedProductId && context.resolution === "MERGED_KEY") {
+        // 統合済み商品のキーに一致。統合済み行は再使用せず、同じキーの新規作成もしない。
+        // 統合先を確認候補として差分に残し、人の確認に回す。
+        diffRows.push(
+          buildDiffItemRow({
+            diffItemId: crypto.randomUUID(),
+            parseRunId,
+            lineItemId: context.lineItemId,
+            classification: "UNMATCHED",
+            reason: "MATCHES_MERGED_PRODUCT",
+            vendorName,
+            invoiceDate,
+            before,
+            after: {
+              ...after,
+              mergedProductId: context.mergedProductId,
+              mergeTargetProductId: context.mergeTargetProductId,
+            },
+          }),
+        );
+        continue;
+      }
+
       if (!context.matchedProductId) {
-        const confidence = context.systemConfidenceNum;
-        const canCreateCandidate = confidence !== null && confidence >= 0.9;
+        const canCreateCandidate = canCreateProvisionalProduct(context.systemConfidenceNum);
         diffRows.push(
           buildDiffItemRow({
             diffItemId: crypto.randomUUID(),
@@ -574,6 +858,171 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
             invoiceDate,
             before,
             after,
+          }),
+        );
+        continue;
+      }
+
+      const matchedProductId = context.matchedProductId;
+      const matchedStatus = context.matchedReviewStatus ?? "LEGACY";
+      const isUnverified = !isAutoUpdatableStatus(matchedStatus);
+      const wasCreated = context.resolution === "CREATED";
+
+      const priceAction = isUnverified
+        ? decideUnverifiedPriceAction({
+            existingUnitPrice: safeParseFloat(vendorMap.get(matchedProductId)?.unitPrice ?? null),
+            newUnitPrice: safeParseFloat(context.unitPrice),
+            vendorName,
+          })
+        : "NONE";
+
+      if (provisionalCreateEnabled) {
+        // 出典の保存。未確認商品には注意理由も残す（確認済み・既存商品には付けない）。
+        const attentionReasons = isUnverified
+          ? collectAttentionReasons({
+              unitPrice: context.unitPriceNum,
+              quantity: context.quantityNum,
+              amount: context.amountNum,
+              vendorName,
+              invoiceDate,
+              spec: context.specRaw,
+            })
+          : [];
+        if (priceAction === "CONFLICT") attentionReasons.push("登録済みの単価と相違");
+        const attentionReason = formatAttentionReason(attentionReasons);
+
+        // 同じ書類・同じ行の再解析では、出典を増やさず新しい明細へ付け替える。
+        const repointed = context.priorSourceLineItemId
+          ? await tx
+              .update(productDocumentSources)
+              .set({
+                lineItemId: context.lineItemId,
+                // 注意理由はシステムが付けたものだけを更新する。
+                ...(isUnverified ? { attentionReason } : {}),
+              })
+              .where(eq(productDocumentSources.lineItemId, context.priorSourceLineItemId))
+              .returning({ lineItemId: productDocumentSources.lineItemId })
+          : [];
+        if (repointed.length === 0) {
+          await tx
+            .insert(productDocumentSources)
+            .values({
+              lineItemId: context.lineItemId,
+              productId: matchedProductId,
+              linkedBy: SYSTEM_REVIEWER,
+              linkMethod: wasCreated ? "PROVISIONAL_CREATE" : "EXACT_MATCH",
+              attentionReason,
+            })
+            .onConflictDoNothing({ target: productDocumentSources.lineItemId });
+        }
+
+        if (wasCreated) {
+          await tx.insert(productReviewHistory).values({
+            productId: matchedProductId,
+            action: "PROVISIONAL_CREATE",
+            sourceLineItemId: context.lineItemId,
+            beforeSnapshot: {},
+            afterSnapshot: {
+              productKey: context.productKeyCandidate,
+              productName: context.productNameRaw,
+              productMaker: context.productMaker,
+              spec: context.specRaw,
+              category: null,
+              reviewStatus: "PROVISIONAL",
+              vendorName,
+              unitPrice: context.unitPrice,
+              invoiceDate,
+              systemConfidence: context.systemConfidence,
+              documentId,
+              parseRunId,
+            },
+            note: attentionReason,
+            reviewedBy: SYSTEM_REVIEWER,
+          });
+        }
+      }
+
+      if (isUnverified) {
+        // 未確認（仮登録・要確認）商品は自動更新しない。
+        // - 規格・品名は書き換えない（手動修正を再解析で戻さない）
+        // - 登録済みの単価は上書きしない。相違は差分に残して人が選ぶ
+        // - 単価が未設定の仕入先には追加するが、商品は未確認のまま
+        const existingVendor = vendorMap.get(matchedProductId) ?? null;
+        if (existingVendor) {
+          before.unitPrice = existingVendor.unitPrice;
+          before.priceUpdatedOn = existingVendor.priceUpdatedOn;
+        }
+        before.productId = matchedProductId;
+        before.spec = context.matchedProductSpec;
+        before.category = context.matchedProductCategory;
+        before.reviewStatus = matchedStatus;
+
+        let priceAdded = false;
+        if (priceAction === "ADD" && vendorName && context.unitPrice) {
+          const [insertedPrice] = await tx
+            .insert(vendorPrices)
+            .values(
+              buildVendorPriceRow({
+                vendorPriceId: crypto.randomUUID(),
+                productId: matchedProductId,
+                vendorName,
+                unitPrice: context.unitPrice,
+                priceUpdatedOn: invoiceDate,
+                sourceId: parseRunId,
+              }),
+            )
+            .onConflictDoNothing({ target: [vendorPrices.productId, vendorPrices.vendorName] })
+            .returning({
+              vendorPriceId: vendorPrices.vendorPriceId,
+              productId: vendorPrices.productId,
+              unitPrice: vendorPrices.unitPrice,
+              priceUpdatedOn: vendorPrices.priceUpdatedOn,
+            });
+          if (insertedPrice) {
+            priceAdded = true;
+            // 同じ解析内の後続明細が、いま追加した単価を比較元にできるようにする。
+            vendorMap.set(matchedProductId, insertedPrice);
+            await tx
+              .insert(updateHistory)
+              .values(
+                buildUpdateHistoryRow({
+                  updateKey: `${parseRunId}:${matchedProductId}:unit_price`,
+                  productId: matchedProductId,
+                  fieldName: "unit_price",
+                  vendorName,
+                  beforeValue: null,
+                  afterValue: context.unitPrice,
+                  sourceId: parseRunId,
+                }),
+              )
+              .onConflictDoNothing({ target: updateHistory.updateKey });
+          }
+        }
+
+        let classification = "NO_CHANGE";
+        let reason = "LINKED_TO_UNVERIFIED_PRODUCT";
+        if (wasCreated) {
+          classification = "UPDATE";
+          reason = "PROVISIONAL_PRODUCT_CREATED";
+        } else if (priceAction === "CONFLICT") {
+          classification = "BLOCKED";
+          reason = "UNVERIFIED_PRODUCT_PRICE_CONFLICT";
+        } else if (priceAdded) {
+          classification = "UPDATE";
+          reason = "UNVERIFIED_PRODUCT_PRICE_ADDED";
+        }
+
+        diffRows.push(
+          buildDiffItemRow({
+            diffItemId: crypto.randomUUID(),
+            parseRunId,
+            lineItemId: context.lineItemId,
+            classification,
+            reason,
+            vendorName,
+            invoiceDate,
+            before: wasCreated ? {} : before,
+            after: { ...after, productId: matchedProductId },
           }),
         );
         continue;
@@ -748,6 +1197,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
           newCandidateCount: diffRows.filter((row) => row.classification === "NEW_CANDIDATE")
             .length,
           unmatchedCount: diffRows.filter((row) => row.classification === "UNMATCHED").length,
+          provisionalCreatedCount: createdProductIds.size,
         },
       })
       .where(eq(documentParseRuns.parseRunId, parseRunId));
@@ -758,8 +1208,7 @@ export async function parseDocument(documentId: string): Promise<ParseDocumentRe
       status: "SUCCEEDED",
       lineItemCount: lineContexts.length,
       diffCount: diffRows.length,
+      provisionalCreatedCount: createdProductIds.size,
     });
   });
-
-  return { parseRunId, status: "SUCCEEDED" };
 }
