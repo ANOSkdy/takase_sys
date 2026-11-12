@@ -1,6 +1,7 @@
 ﻿import "server-only";
 import { z } from "zod";
 import { Pool } from "pg";
+import { toReviewStatus, type ReviewStatus } from "@/domain/review-status";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -52,6 +53,7 @@ export type RecordRow = {
   spec: string | null;
   productMaker: string | null;
   category: string | null;
+  reviewStatus: ReviewStatus;
   vendorName: string | null;
   unitPrice: number | null;
   priceUpdatedOn: string | null;
@@ -75,6 +77,7 @@ type DbRow = {
   spec: string | null;
   productMaker: string | null;
   category: string | null;
+  reviewStatus: string;
   vendorName: string | null;
   unitPrice: string | number | null;
   priceUpdatedOn: string | Date | null;
@@ -110,7 +113,8 @@ function tokenizeFreeword(q: string): string[] {
 }
 
 export async function searchRecords(params: RecordSearchParams): Promise<RecordSearchResult> {
-  const where: string[] = [];
+  // 統合済み商品は通常の検索結果に出さない。
+  const where: string[] = [`pm.review_status <> 'MERGED'`];
   const values: SqlParam[] = [];
 
   const add = (sqlFragmentWithDollar: string, value: SqlParam) => {
@@ -157,7 +161,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     }
   }
 
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const whereSql = `WHERE ${where.join(" AND ")}`;
 
   const limit = params.pageSize;
   const offset = (params.page - 1) * params.pageSize;
@@ -175,6 +179,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
       pm.spec AS "spec",
       pm.product_maker AS "productMaker",
       pm.category AS "category",
+      pm.review_status AS "reviewStatus",
       vp.vendor_name AS "vendorName",
       vp.unit_price AS "unitPrice",
       vp.price_updated_on AS "priceUpdatedOn",
@@ -197,6 +202,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
       SELECT DISTINCT pm.category AS category
       FROM product_master pm
       WHERE pm.category IS NOT NULL AND pm.category <> ''
+        AND pm.review_status <> 'MERGED'
       ORDER BY pm.category ASC
     `),
   ]);
@@ -211,6 +217,7 @@ export async function searchRecords(params: RecordSearchParams): Promise<RecordS
     spec: r.spec ?? null,
     productMaker: r.productMaker ?? null,
     category: r.category ?? null,
+    reviewStatus: toReviewStatus(r.reviewStatus),
     vendorName: r.vendorName ?? null,
     unitPrice: r.unitPrice == null ? null : Number(r.unitPrice),
     priceUpdatedOn: toIsoDate(r.priceUpdatedOn),

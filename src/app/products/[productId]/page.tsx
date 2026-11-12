@@ -1,5 +1,11 @@
 import { headers } from "next/headers";
 import type { CSSProperties, ReactNode } from "react";
+import {
+  attentionTextStyle,
+  ReviewStatusBadge,
+  SourceLink,
+} from "@/components/product/ReviewStatus";
+import { needsAttention } from "@/domain/review-status";
 import type { ProductDetail } from "@/services/products/types";
 
 export const runtime = "nodejs";
@@ -31,12 +37,47 @@ export default async function ProductDetailPage({
     );
   }
 
+  // 要確認の理由は、注意理由が記録された最新の出典から表示する。
+  const attentionReason =
+    product.reviewStatus === "NEEDS_REVIEW"
+      ? (product.sources.find((source) => source.attentionReason)?.attentionReason ?? null)
+      : null;
+
   return (
     <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
       <header style={{ display: "grid", gap: "var(--space-2)" }}>
-        <h1 style={{ margin: 0 }}>{product.productName}</h1>
+        <h1 style={{ margin: 0, ...attentionTextStyle(product.reviewStatus) }}>
+          {product.productName}
+        </h1>
+        <div>
+          <ReviewStatusBadge status={product.reviewStatus} reason={attentionReason} />
+        </div>
         <p style={{ margin: 0, color: "var(--muted)" }}>商品ID: {product.productId}</p>
       </header>
+
+      {product.reviewStatus === "MERGED" && (
+        <section style={noticeStyle} role="note">
+          この商品は統合済みです。
+          {product.mergedInto ? (
+            <>
+              統合先:{" "}
+              <a href={`/products/${product.mergedInto.productId}`}>
+                {product.mergedInto.productName}
+              </a>
+            </>
+          ) : (
+            "統合先を特定できませんでした。"
+          )}
+        </section>
+      )}
+
+      {needsAttention(product.reviewStatus) && (
+        <section style={noticeStyle} role="note">
+          {product.reviewStatus === "PROVISIONAL"
+            ? "PDFから作成された未確認の商品です。商品情報と価格は、出典PDFで内容を確認してから利用してください。"
+            : "確認が必要な商品です。出典PDFで内容を確認してください。"}
+        </section>
+      )}
 
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>基本情報</h2>
@@ -45,6 +86,16 @@ export default async function ProductDetailPage({
           <dd style={valueStyle}>{product.productKey}</dd>
           <dt style={termStyle}>規格</dt>
           <dd style={valueStyle}>{product.spec ?? "-"}</dd>
+          <dt style={termStyle}>確認状態</dt>
+          <dd style={valueStyle}>
+            <ReviewStatusBadge status={product.reviewStatus} />
+            {product.reviewStatus === "VERIFIED" && product.reviewedAt && (
+              <span style={{ marginLeft: 8, color: "var(--muted)" }}>
+                {product.reviewedAt.slice(0, 10)}
+                {product.reviewedBy ? ` ／ 確認者（入力値）: ${product.reviewedBy}` : ""}
+              </span>
+            )}
+          </dd>
           <dt style={termStyle}>品質フラグ</dt>
           <dd style={valueStyle}>{product.qualityFlag}</dd>
           <dt style={termStyle}>カテゴリ</dt>
@@ -57,7 +108,33 @@ export default async function ProductDetailPage({
       </section>
 
       <section style={cardStyle}>
+        <h2 style={{ marginTop: 0 }}>出典PDF（{product.sources.length}件）</h2>
+        {product.sources.length === 0 ? (
+          <p style={{ margin: 0, color: "var(--muted)" }}>
+            この商品に紐付く出典PDFは記録されていません。
+          </p>
+        ) : (
+          <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+            {product.sources.map((source) => (
+              <li key={source.lineItemId}>
+                <SourceLink source={source} />
+                <span style={{ marginLeft: 8, fontSize: 12, color: "var(--muted)" }}>
+                  {source.lineNo != null ? `明細${source.lineNo}行目` : ""}
+                  {source.attentionReason ? ` ／ 注意: ${source.attentionReason}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>仕入先価格</h2>
+        {needsAttention(product.reviewStatus) && product.vendorPrices.length > 0 && (
+          <p style={{ marginTop: 0, color: "var(--color-danger)" }}>
+            ⚠ 商品が未確認のため、以下の価格も未確認です。
+          </p>
+        )}
         <div style={{ overflowX: "auto" }}>
           <table style={tableStyle}>
             <thead>
@@ -139,6 +216,13 @@ const cardStyle: CSSProperties = {
   borderRadius: "var(--radius-lg)",
   boxShadow: "var(--shadow-soft)",
   padding: "var(--space-4)",
+};
+
+const noticeStyle: CSSProperties = {
+  background: "var(--color-danger-soft)",
+  border: "1px solid var(--color-danger)",
+  borderRadius: "var(--radius-lg)",
+  padding: "var(--space-3) var(--space-4)",
 };
 
 const tableStyle: CSSProperties = {

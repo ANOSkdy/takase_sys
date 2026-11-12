@@ -1,4 +1,5 @@
 ﻿import {
+  type AnyPgColumn,
   boolean,
   date,
   integer,
@@ -23,6 +24,15 @@ export const productMaster = pgTable("product_master", {
   lastUpdatedAt: timestamp("last_updated_at", { withTimezone: true }).notNull(),
   lastSourceType: text("last_source_type"),
   lastSourceId: text("last_source_id"),
+  // v3 (db/schema/v3_product_review.sql): 確認状態。LEGACY は確認済みを意味しない。
+  // PDF由来の新規作成では DB 既定値に任せず review_status を明示すること。
+  reviewStatus: text("review_status").notNull().default("LEGACY"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewedBy: text("reviewed_by"),
+  mergedIntoProductId: uuid("merged_into_product_id").references(
+    (): AnyPgColumn => productMaster.productId,
+    { onDelete: "restrict" },
+  ),
 });
 
 // 2) vendor_prices
@@ -126,4 +136,49 @@ export const excelImportRuns = pgTable("excel_import_runs", {
   status: text("status").notNull(),
   stats: jsonb("stats").$type<Record<string, unknown>>().notNull(),
   errorDetail: text("error_detail"),
+});
+
+// 9) product_document_sources (v3)
+// 1つの抽出明細の現在の紐付け先は1商品。PDF URL は保存しない。
+export type ProductMatchCandidate = {
+  productId: string;
+  productName?: string | null;
+  spec?: string | null;
+  matchedFields?: string[];
+  differingFields?: string[];
+  reason?: string | null;
+};
+
+export const productDocumentSources = pgTable("product_document_sources", {
+  lineItemId: uuid("line_item_id")
+    .primaryKey()
+    .references(() => documentLineItems.lineItemId, { onDelete: "restrict" }),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => productMaster.productId, { onDelete: "restrict" }),
+  linkedAt: timestamp("linked_at", { withTimezone: true }).notNull().defaultNow(),
+  linkedBy: text("linked_by"),
+  linkMethod: text("link_method").notNull(),
+  attentionReason: text("attention_reason"),
+  matchCandidates: jsonb("match_candidates").$type<ProductMatchCandidate[]>().notNull().default([]),
+});
+
+// 10) product_review_history (v3)
+export const productReviewHistory = pgTable("product_review_history", {
+  reviewId: uuid("review_id").primaryKey().defaultRandom(),
+  productId: uuid("product_id")
+    .notNull()
+    .references(() => productMaster.productId, { onDelete: "restrict" }),
+  action: text("action").notNull(),
+  targetProductId: uuid("target_product_id").references(() => productMaster.productId, {
+    onDelete: "restrict",
+  }),
+  sourceLineItemId: uuid("source_line_item_id").references(() => documentLineItems.lineItemId, {
+    onDelete: "restrict",
+  }),
+  beforeSnapshot: jsonb("before_snapshot").$type<Record<string, unknown>>().notNull().default({}),
+  afterSnapshot: jsonb("after_snapshot").$type<Record<string, unknown>>().notNull().default({}),
+  note: text("note"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull().defaultNow(),
+  reviewedBy: text("reviewed_by").notNull(),
 });
