@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { PgQueryResultHKT } from "drizzle-orm/pg-core";
 import {
   documentDiffItems,
@@ -152,6 +152,10 @@ export async function migrateProvisionalProducts<H extends PgQueryResultHKT>(
 
   try {
     await db.transaction(async (tx) => {
+      // 実DBには旧来の重複キーがあり、一意制約がない環境もある。
+      // 手動移行中の商品作成を直列化し、照合からINSERTまでの競合を防ぐ。
+      await tx.execute(sql`SET LOCAL lock_timeout = '5s'`);
+      await tx.execute(sql`LOCK TABLE product_master IN SHARE ROW EXCLUSIVE MODE`);
       // 1) 対象の固定: 削除されていない書類の、成功した最新の解析だけを使う。
       const docRows = await tx
         .select({
@@ -270,6 +274,12 @@ export async function migrateProvisionalProducts<H extends PgQueryResultHKT>(
           })
           .from(productMaster)
           .where(eq(productMaster.productKey, productKey))
+          // 重複キーがある場合は、解析時と同じく統合済みでない最新の行を優先する。
+          .orderBy(
+            sql`(${productMaster.reviewStatus} = 'MERGED')`,
+            desc(productMaster.lastUpdatedAt),
+            productMaster.productId,
+          )
           .limit(1);
         return row
           ? {
@@ -359,7 +369,7 @@ export async function migrateProvisionalProducts<H extends PgQueryResultHKT>(
               lastSourceId: row.parseRunId,
               reviewStatus: "PROVISIONAL",
             })
-            .onConflictDoNothing({ target: productMaster.productKey })
+            .onConflictDoNothing()
             .returning({ productId: productMaster.productId });
           if (inserted) {
             created = true;

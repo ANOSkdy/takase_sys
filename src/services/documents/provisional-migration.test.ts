@@ -129,6 +129,20 @@ beforeEach(async () => {
 });
 
 describe("migrateProvisionalProducts", () => {
+  it("supports a product_master without a unique product key and remains idempotent", async () => {
+    // テスト用DBは本番と同じく product_key の一意制約がない（旧来の重複キーもある）。
+    await t.rows(
+      `INSERT INTO product_master (product_key, product_name)
+       VALUES ('legacy-duplicate', '既存'), ('legacy-duplicate', '既存')`,
+    );
+    await addRun(await addDocument(), [{}, {}]);
+
+    expect((await run()).createdProducts).toHaveLength(1);
+    expect((await run()).createdProducts).toHaveLength(0);
+    expect(await count("product_master")).toBe(3);
+    expect(await count("product_document_sources")).toBe(2);
+  });
+
   it("reports what it would do in a dry run and leaves the database untouched", async () => {
     await addRun(await addDocument(), [{}]);
 
