@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ReviewStatusBadge } from "@/components/product/ReviewStatus";
 import type { ReviewStatus } from "@/domain/review-status";
@@ -11,8 +11,6 @@ import type {
   ProductListItem,
   ProductVendorPrice,
 } from "@/services/products/types";
-
-const REVIEWER_STORAGE_KEY = "takase.reviewerName";
 
 type PanelProduct = {
   productId: string;
@@ -58,7 +56,6 @@ export default function ReviewPanel({
   candidateSnapshotChanges: CandidateSnapshotChange[];
 }) {
   const router = useRouter();
-  const [reviewer, setReviewer] = useState("");
   const [mode, setMode] = useState<Mode>("idle");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,15 +80,6 @@ export default function ReviewPanel({
   const [searchResults, setSearchResults] = useState<MergeTarget[] | null>(null);
   const [searching, setSearching] = useState(false);
 
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(REVIEWER_STORAGE_KEY);
-      if (saved) setReviewer(saved);
-    } catch {
-      // 保存できない環境では毎回入力してもらう。
-    }
-  }, []);
-
   const resetMessages = () => {
     setError(null);
     setStale(false);
@@ -105,26 +93,15 @@ export default function ReviewPanel({
 
   /** 成功時は遷移先のIDまたは null、失敗時は false。 */
   const submit = async (body: Record<string, unknown>): Promise<string | null | false> => {
-    const reviewedBy = reviewer.trim();
-    if (!reviewedBy) {
-      setError("確認者名を入力してください。");
-      return false;
-    }
     if (busy) return false;
     setBusy(true);
     resetMessages();
     try {
-      try {
-        window.localStorage.setItem(REVIEWER_STORAGE_KEY, reviewedBy);
-      } catch {
-        // 保存できなくても操作は続ける。
-      }
       const res = await fetch(`/api/products/${product.productId}/review`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...body,
-          reviewedBy,
           expectedUpdatedAt: product.lastUpdatedAt,
         }),
       });
@@ -239,24 +216,7 @@ export default function ReviewPanel({
     <section style={cardStyle} aria-label="確認操作">
       <h2 style={{ marginTop: 0 }}>確認操作</h2>
 
-      <div style={{ display: "grid", gap: 4, maxWidth: 320 }}>
-        <label htmlFor="reviewer-name" style={labelStyle}>
-          確認者名（必須）
-        </label>
-        <input
-          id="reviewer-name"
-          value={reviewer}
-          onChange={(event) => setReviewer(event.target.value)}
-          maxLength={100}
-          style={inputStyle}
-          placeholder="例：高瀬"
-        />
-        <span style={hintStyle}>
-          入力した名前を履歴に記録します（ログイン機能がないため、本人確認の証跡ではありません）。
-        </span>
-      </div>
-
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {product.reviewStatus !== "VERIFIED" && (
           <button type="button" style={btnPrimary} disabled={busy} onClick={verify}>
             この内容で確定する

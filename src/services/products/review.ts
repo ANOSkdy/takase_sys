@@ -19,12 +19,22 @@ import { isMergeTargetStatus } from "@/services/products/candidates";
  * - 対象商品（統合では統合先も）を行ロックし、画面が読み込んだ時点の更新日時と比較する。
  *   一致しなければ何も書き込まず STALE を返す（二重送信や同時操作で履歴・価格を重複させない）。
  * - 商品・価格・出典・履歴は同一トランザクションで更新する。
- * - 確認者名は入力値の記録であり、本人認証の証跡ではない（アプリ内認証なし）。
+ * - アプリ内認証がないため、画面からの操作の記録者は固定値（MANUAL_REVIEWER）とする。
+ *   既存の手動編集（update_history.updated_by = 'unknown'）と同じ扱い。
  */
+
+/** 画面からの確認操作の記録者。アプリ内認証がないため個人は特定しない。 */
+export const MANUAL_REVIEWER = "unknown";
 
 const MANUAL_SOURCE_TYPE = "MANUAL_REVIEW";
 
-const reviewerSchema = z.string().trim().min(1, "確認者名を入力してください。").max(100);
+// 互換のため値を受け取れるが、画面からは送らない。未指定・空は MANUAL_REVIEWER。
+const reviewerSchema = z
+  .string()
+  .trim()
+  .max(100)
+  .optional()
+  .transform((value) => value || MANUAL_REVIEWER);
 const tokenSchema = z.string().trim().min(1).max(64);
 const noteSchema = z.string().trim().max(500).optional();
 const optionalText = (max: number) =>

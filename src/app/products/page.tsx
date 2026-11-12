@@ -1,23 +1,17 @@
-import { headers } from "next/headers";
 import type { CSSProperties, ReactNode } from "react";
 import {
   attentionTextStyle,
   ReviewStatusBadge,
   SourceLink,
 } from "@/components/product/ReviewStatus";
-import type { ProductListItem } from "@/services/products/types";
+import { listProducts } from "@/services/products/repository";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ProductsResponse = { items: ProductListItem[] };
-
-async function getBaseUrl() {
-  const headerList = await headers();
-  const host = headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") ?? "http";
-  return host ? `${proto}://${host}` : "";
-}
+// サーバー側から自分自身の /api を HTTP で呼ばず、DBから直接取得する。
+// Vercel のデプロイ保護がある環境（Preview）では、サーバーからの自己呼び出しが
+// ログイン画面へリダイレクトされ、JSON として読めずにページ全体がエラーになるため。
 
 type SearchParams = { keyword?: string };
 
@@ -27,11 +21,9 @@ export default async function ProductsPage({
   searchParams?: Promise<SearchParams>;
 }) {
   const resolvedSearchParams = await (searchParams ?? Promise.resolve({} as SearchParams));
-  const keyword = resolvedSearchParams.keyword ?? "";
-  const baseUrl = await getBaseUrl();
-  const query = keyword ? `?keyword=${encodeURIComponent(keyword)}` : "";
-  const res = await fetch(`${baseUrl}/api/products${query}`, { cache: "no-store" });
-  const items = res.ok ? ((await res.json()) as ProductsResponse).items : [];
+  const keyword = (resolvedSearchParams.keyword ?? "").trim().slice(0, 200);
+  // API（/api/products）の既定と同じく、件数の上限は付けない。
+  const items = await listProducts({ keyword: keyword || null });
 
   return (
     <main style={{ padding: "var(--space-6)", display: "grid", gap: "var(--space-4)" }}>
