@@ -10,6 +10,7 @@ import { createTestDb, type TestDb } from "@/test/pglite";
 type Line = ParsedInvoice["lineItems"][number];
 
 const VENDOR = "山田興業株式会社";
+const KEY_FOR_DUPLICATE = `フクビ化学工業(株)｜ウェザータイト(防水部材)｜パイプ用 150φ WTP150 □255mm`;
 const MAKER = "フクビ化学工業(株)";
 
 function line(overrides: Partial<Line> = {}): Line {
@@ -421,6 +422,31 @@ describe("persistParseResult with provisional creation enabled", () => {
     ]);
     expect(await count("product_review_history")).toBe(0);
     expect(await diffs(run)).toMatchObject([{ classification: "UPDATE" }]);
+  });
+
+  it("works with duplicated legacy product keys, as in the production database", async () => {
+    // 本番DBには product_key の一意制約がなく、同じキーの行が既に存在する。
+    const older = await addProduct({ key: KEY_FOR_DUPLICATE, name: "古い行", maker: MAKER });
+    const newer = await addProduct({ key: KEY_FOR_DUPLICATE, name: "新しい行", maker: MAKER });
+    await t.rows(
+      `UPDATE product_master SET last_updated_at = now() - interval '1 day' WHERE product_id = $1`,
+      [older],
+    );
+
+    await parse(await addDocument(), invoice([line()]));
+
+    expect(await products()).toHaveLength(2);
+    expect(await sources()).toMatchObject([{ product_id: newer, link_method: "EXACT_MATCH" }]);
+  });
+
+  it("does not create a second product for a key that appeared after matching", async () => {
+    // 照合後・作成前に別の処理が同じキーを登録したケースを、作成の直前の再確認で防ぐ。
+    const doc = await addDocument();
+    await parse(doc, invoice([line()]));
+    await parse(await addDocument("納品書3.pdf"), invoice([line()]));
+
+    expect(await products()).toHaveLength(1);
+    expect(await count("product_review_history")).toBe(1);
   });
 
   it("rolls everything back when saving fails part-way", async () => {
