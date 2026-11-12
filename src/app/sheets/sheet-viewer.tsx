@@ -1231,7 +1231,11 @@ export default function ProductSheetViewer({
                                     sourceCount={row.sourceSummary.sourceCount}
                                   />
                                 )}
-                                <a href={`/products/${row.productId}`} style={{ fontSize: 12 }}>
+                                <a
+                                  href={`/products/${row.productId}`}
+                                  className={styles.detailButton}
+                                  aria-label={`${row.productName} の詳細を開いて確認・確定する`}
+                                >
                                   詳細
                                 </a>
                               </div>

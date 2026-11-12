@@ -9,6 +9,12 @@ import { needsAttention } from "@/domain/review-status";
 import type { ProductDetail } from "@/services/products/types";
 import ReviewPanel from "./review-panel";
 
+const recorderLabels: Record<string, string> = {
+  unknown: "画面から操作",
+  "system:pdf-parse": "PDF解析",
+  "system:provisional-migration": "データ移行",
+};
+
 const reviewActionLabels: Record<string, string> = {
   PROVISIONAL_CREATE: "仮登録（PDF解析）",
   VERIFY: "確定",
@@ -124,7 +130,6 @@ export default async function ProductDetailPage({
             {product.reviewStatus === "VERIFIED" && product.reviewedAt && (
               <span style={{ marginLeft: 8, color: "var(--muted)" }}>
                 {product.reviewedAt.slice(0, 10)}
-                {product.reviewedBy ? ` ／ 確認者（入力値）: ${product.reviewedBy}` : ""}
               </span>
             )}
           </dd>
@@ -208,7 +213,7 @@ export default async function ProductDetailPage({
             <thead>
               <tr>
                 <Th>操作</Th>
-                <Th>確認者（入力値）</Th>
+                <Th>記録</Th>
                 <Th>メモ・理由</Th>
                 <Th>日時</Th>
               </tr>
@@ -225,7 +230,7 @@ export default async function ProductDetailPage({
                       </>
                     )}
                   </Td>
-                  <Td muted>{entry.reviewedBy}</Td>
+                  <Td muted>{recorderLabels[entry.reviewedBy] ?? entry.reviewedBy}</Td>
                   <Td muted>{entry.note ?? "-"}</Td>
                   <Td muted>{entry.reviewedAt.slice(0, 16).replace("T", " ")} UTC</Td>
                 </tr>

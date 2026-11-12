@@ -60,21 +60,15 @@ describe("ReviewPanel", () => {
     vi.clearAllMocks();
   });
 
-  it("does not send anything without a reviewer name", () => {
-    const fetchMock = mockFetch(200, {});
+  it("has no reviewer name field", () => {
     renderPanel();
-
-    fireEvent.click(screen.getByRole("button", { name: "この内容で確定する" }));
-
-    expect(screen.getByRole("alert")).toHaveTextContent("確認者名を入力してください。");
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText(/確認者/)).toBeNull();
   });
 
-  it("sends the verify action with the reviewer and the version it was loaded with", async () => {
+  it("sends the verify action with the version it was loaded with", async () => {
     const fetchMock = mockFetch(200, { ok: true, reviewStatus: "VERIFIED" });
     renderPanel();
 
-    fireEvent.change(screen.getByLabelText("確認者名（必須）"), { target: { value: "高瀬" } });
     fireEvent.click(screen.getByRole("button", { name: "この内容で確定する" }));
 
     await waitFor(() => expect(refresh).toHaveBeenCalled());
@@ -82,7 +76,6 @@ describe("ReviewPanel", () => {
     expect(url).toBe(`/api/products/${product.productId}/review`);
     expect(JSON.parse(init.body)).toEqual({
       action: "VERIFY",
-      reviewedBy: "高瀬",
       expectedUpdatedAt: product.lastUpdatedAt,
     });
   });
@@ -91,7 +84,6 @@ describe("ReviewPanel", () => {
     mockFetch(409, { detail: "他の操作で更新されています。", errors: { code: "STALE" } });
     renderPanel();
 
-    fireEvent.change(screen.getByLabelText("確認者名（必須）"), { target: { value: "高瀬" } });
     fireEvent.click(screen.getByRole("button", { name: "この内容で確定する" }));
 
     expect(await screen.findByRole("button", { name: "再読み込み" })).toBeInTheDocument();
@@ -127,7 +119,6 @@ describe("ReviewPanel", () => {
       },
     });
     renderPanel();
-    fireEvent.change(screen.getByLabelText("確認者名（必須）"), { target: { value: "高瀬" } });
     fireEvent.click(screen.getByRole("button", { name: "既存商品へ統合" }));
     fireEvent.click(screen.getAllByRole("radio")[0]);
     const mergeButton = screen.getByRole("button", { name: /へ統合する$/ });

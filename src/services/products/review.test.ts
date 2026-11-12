@@ -122,7 +122,7 @@ const count = async (table: string) =>
   Number((await t.rows<{ n: string }>(`SELECT count(*) AS n FROM ${table}`))[0].n);
 
 function act(productId: string, input: Record<string, unknown>) {
-  const parsed = reviewActionSchema.parse({ reviewedBy: "高瀬", ...input }) as ReviewActionInput;
+  const parsed = reviewActionSchema.parse(input) as ReviewActionInput;
   return applyReviewAction(t.db, productId, parsed);
 }
 
@@ -139,13 +139,15 @@ beforeEach(async () => {
 });
 
 describe("reviewActionSchema", () => {
-  it("requires a reviewer name", () => {
-    const result = reviewActionSchema.safeParse({
-      action: "VERIFY",
-      reviewedBy: "  ",
-      expectedUpdatedAt: "x",
-    });
-    expect(result.success).toBe(false);
+  it("records a fixed recorder when no reviewer is sent", () => {
+    for (const reviewedBy of [undefined, "", "  "]) {
+      const result = reviewActionSchema.parse({
+        action: "VERIFY",
+        reviewedBy,
+        expectedUpdatedAt: "x",
+      });
+      expect(result.reviewedBy).toBe("unknown");
+    }
   });
 });
 
@@ -155,8 +157,11 @@ describe("VERIFY", () => {
     const result = await act(id, { action: "VERIFY", expectedUpdatedAt: await token(id) });
 
     expect(result).toMatchObject({ ok: true, reviewStatus: "VERIFIED" });
-    expect(await getProduct(id)).toMatchObject({ review_status: "VERIFIED", reviewed_by: "高瀬" });
-    expect(await history()).toMatchObject([{ action: "VERIFY", reviewed_by: "高瀬" }]);
+    expect(await getProduct(id)).toMatchObject({
+      review_status: "VERIFIED",
+      reviewed_by: "unknown",
+    });
+    expect(await history()).toMatchObject([{ action: "VERIFY", reviewed_by: "unknown" }]);
   });
 
   it("does nothing on a second submission with the same token (double click)", async () => {
@@ -228,7 +233,7 @@ describe("CORRECT", () => {
       `SELECT before_value, after_value, updated_by FROM update_history`,
     );
     expect(updates).toMatchObject([
-      { before_value: "383.00", after_value: "390.00", updated_by: "高瀬" },
+      { before_value: "383.00", after_value: "390.00", updated_by: "unknown" },
     ]);
   });
 
