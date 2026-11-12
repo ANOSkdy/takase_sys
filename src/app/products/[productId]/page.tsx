@@ -1,12 +1,12 @@
-import { headers } from "next/headers";
 import type { CSSProperties, ReactNode } from "react";
+import { z } from "zod";
 import {
   attentionTextStyle,
   ReviewStatusBadge,
   SourceLink,
 } from "@/components/product/ReviewStatus";
 import { needsAttention } from "@/domain/review-status";
-import type { ProductDetail } from "@/services/products/types";
+import { getProductDetail } from "@/services/products/repository";
 import ReviewPanel from "./review-panel";
 
 const recorderLabels: Record<string, string> = {
@@ -26,12 +26,10 @@ const reviewActionLabels: Record<string, string> = {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function getBaseUrl() {
-  const headerList = await headers();
-  const host = headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") ?? "http";
-  return host ? `${proto}://${host}` : "";
-}
+// サーバー側から自分自身の /api を HTTP で呼ばず、DBから直接取得する。
+// Vercel のデプロイ保護がある環境（Preview）では、サーバーからの自己呼び出しが
+// ログイン画面へリダイレクトされ、JSON として読めずにページ全体がエラーになるため。
+const productIdSchema = z.string().uuid();
 
 export default async function ProductDetailPage({
   params,
@@ -39,10 +37,9 @@ export default async function ProductDetailPage({
   params: Promise<{ productId: string }>;
 }) {
   const { productId } = await params;
-  const baseUrl = await getBaseUrl();
-
-  const res = await fetch(`${baseUrl}/api/products/${productId}`, { cache: "no-store" });
-  const product = res.ok ? ((await res.json()) as ProductDetail) : null;
+  const product = productIdSchema.safeParse(productId).success
+    ? await getProductDetail(productId)
+    : null;
 
   if (!product) {
     return (
