@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import {
@@ -279,6 +279,9 @@ export async function applyReviewAction<H extends PgQueryResultHKT>(
         ? makeProductKey(next.productName, next.spec, next.productMaker)
         : product.productKey;
       if (nextKey !== product.productKey) {
+        // product_key には一意制約がない（本番DB）。解析時の仮登録と同じロックで、
+        // 確認から更新までの間に同じキーの商品が作られないようにする。
+        await tx.execute(sql`LOCK TABLE product_master IN SHARE ROW EXCLUSIVE MODE`);
         const [duplicate] = await tx
           .select({ productId: productMaster.productId })
           .from(productMaster)
