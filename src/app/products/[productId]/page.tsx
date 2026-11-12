@@ -7,6 +7,15 @@ import {
 } from "@/components/product/ReviewStatus";
 import { needsAttention } from "@/domain/review-status";
 import type { ProductDetail } from "@/services/products/types";
+import ReviewPanel from "./review-panel";
+
+const reviewActionLabels: Record<string, string> = {
+  PROVISIONAL_CREATE: "仮登録（PDF解析）",
+  VERIFY: "確定",
+  REQUEST_REVIEW: "再確認を依頼",
+  CORRECT: "修正",
+  MERGE: "統合",
+};
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,10 +46,12 @@ export default async function ProductDetailPage({
     );
   }
 
-  // 要確認の理由は、注意理由が記録された最新の出典から表示する。
+  // 要確認の理由は、最新の再確認依頼の理由を優先し、なければ出典の注意理由を表示する。
   const attentionReason =
     product.reviewStatus === "NEEDS_REVIEW"
-      ? (product.sources.find((source) => source.attentionReason)?.attentionReason ?? null)
+      ? (product.reviewHistory.find((entry) => entry.action === "REQUEST_REVIEW")?.note ??
+        product.sources.find((source) => source.attentionReason)?.attentionReason ??
+        null)
       : null;
 
   return (
@@ -79,11 +90,32 @@ export default async function ProductDetailPage({
         </section>
       )}
 
+      {product.reviewStatus !== "MERGED" && (
+        <ReviewPanel
+          // 操作後に再取得した内容でフォームを作り直す。
+          key={product.lastUpdatedAt}
+          product={{
+            productId: product.productId,
+            productName: product.productName,
+            productMaker: product.productMaker,
+            spec: product.spec,
+            category: product.category,
+            reviewStatus: product.reviewStatus,
+            lastUpdatedAt: product.lastUpdatedAt,
+            vendorPrices: product.vendorPrices,
+          }}
+          candidates={product.candidates}
+          candidateSnapshotChanges={product.candidateSnapshotChanges}
+        />
+      )}
+
       <section style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>基本情報</h2>
         <dl style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 8, margin: 0 }}>
           <dt style={termStyle}>商品キー</dt>
           <dd style={valueStyle}>{product.productKey}</dd>
+          <dt style={termStyle}>メーカー</dt>
+          <dd style={valueStyle}>{product.productMaker ?? "-"}</dd>
           <dt style={termStyle}>規格</dt>
           <dd style={valueStyle}>{product.spec ?? "-"}</dd>
           <dt style={termStyle}>確認状態</dt>
@@ -161,6 +193,50 @@ export default async function ProductDetailPage({
                     style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
                   >
                     まだ価格情報がありません。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section style={cardStyle}>
+        <h2 style={{ marginTop: 0 }}>確認履歴</h2>
+        <div style={{ overflowX: "auto" }}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <Th>操作</Th>
+                <Th>確認者（入力値）</Th>
+                <Th>メモ・理由</Th>
+                <Th>日時</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {product.reviewHistory.map((entry) => (
+                <tr key={entry.reviewId}>
+                  <Td>
+                    {reviewActionLabels[entry.action] ?? entry.action}
+                    {entry.targetProductId && (
+                      <>
+                        {" → "}
+                        <a href={`/products/${entry.targetProductId}`}>統合先</a>
+                      </>
+                    )}
+                  </Td>
+                  <Td muted>{entry.reviewedBy}</Td>
+                  <Td muted>{entry.note ?? "-"}</Td>
+                  <Td muted>{entry.reviewedAt.slice(0, 16).replace("T", " ")} UTC</Td>
+                </tr>
+              ))}
+              {product.reviewHistory.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    style={{ padding: 24, textAlign: "center", color: "var(--muted)" }}
+                  >
+                    まだ確認履歴がありません。
                   </td>
                 </tr>
               )}

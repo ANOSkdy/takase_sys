@@ -6,6 +6,7 @@ import {
   documentDiffItems,
   documentLineItems,
   documentParseRuns,
+  productDocumentSources,
   productMaster,
   vendorPrices,
 } from "@/db/schema";
@@ -99,6 +100,7 @@ export async function POST(
         productName: productMaster.productName,
         spec: productMaster.spec,
         category: productMaster.category,
+        reviewStatus: productMaster.reviewStatus,
       })
       .from(productMaster)
       .where(eq(productMaster.productId, productId))
@@ -106,6 +108,10 @@ export async function POST(
 
     if (!product) {
       throw new Error("PRODUCT_NOT_FOUND");
+    }
+    // 統合済みの商品には紐付けない（統合先を選び直す）。
+    if (product.reviewStatus === "MERGED") {
+      throw new Error("PRODUCT_MERGED");
     }
 
     const [existingVendor] = diff.vendorName
@@ -158,6 +164,25 @@ export async function POST(
       .update(documentLineItems)
       .set({ matchedProductId: product.productId })
       .where(eq(documentLineItems.lineItemId, diff.lineItemId));
+
+    // 手動紐付けも出典として残す。再解析時はこの紐付けが商品キーの照合より優先される。
+    await tx
+      .insert(productDocumentSources)
+      .values({
+        lineItemId: diff.lineItemId,
+        productId: product.productId,
+        linkedBy: "manual:link-product",
+        linkMethod: "MANUAL_LINK",
+      })
+      .onConflictDoUpdate({
+        target: productDocumentSources.lineItemId,
+        set: {
+          productId: product.productId,
+          linkedBy: "manual:link-product",
+          linkMethod: "MANUAL_LINK",
+          linkedAt: new Date(),
+        },
+      });
 
     await tx
       .update(documentDiffItems)

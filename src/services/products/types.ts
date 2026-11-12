@@ -1,4 +1,5 @@
 import type { ReviewStatus } from "@/domain/review-status";
+import type { SimilarProductCandidate } from "@/services/products/candidates";
 
 /** 商品の出典（PDF解析の抽出明細）。PDFの実体URLは含めない。 */
 export type ProductSource = {
@@ -18,6 +19,23 @@ export type ProductSource = {
 export type ProductSourceSummary = {
   sourceCount: number;
   representative: ProductSource;
+};
+
+/** 確認操作の履歴（product_review_history）。 */
+export type ProductReviewHistoryEntry = {
+  reviewId: string;
+  action: string;
+  targetProductId: string | null;
+  note: string | null;
+  reviewedAt: string;
+  reviewedBy: string;
+};
+
+/** 照合時点の候補スナップショットと現在の状態との差。 */
+export type CandidateSnapshotChange = {
+  productId: string;
+  productName: string | null;
+  change: string;
 };
 
 export type ProductListItem = {
@@ -46,7 +64,13 @@ export type ProductDetail = Omit<ProductListItem, "sourceSummary"> & {
   reviewedBy: string | null;
   /** MERGED の場合の統合先。 */
   mergedInto: { productId: string; productName: string } | null;
+  productMaker: string | null;
   sources: ProductSource[];
+  reviewHistory: ProductReviewHistoryEntry[];
+  /** 現在の類似候補（統合済み商品では空）。 */
+  candidates: SimilarProductCandidate[];
+  /** 照合時点の候補のうち、現在は候補でなくなった・内容が変わったもの。 */
+  candidateSnapshotChanges: CandidateSnapshotChange[];
   vendorPrices: ProductVendorPrice[];
   updateHistory: ProductUpdateHistory[];
 };

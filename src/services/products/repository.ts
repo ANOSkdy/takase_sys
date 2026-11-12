@@ -1,11 +1,20 @@
 import "server-only";
 import { and, desc, eq, ilike, inArray, ne, or, type SQL } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { productMaster, updateHistory, vendorPrices } from "@/db/schema";
+import {
+  productDocumentSources,
+  productMaster,
+  productReviewHistory,
+  updateHistory,
+  vendorPrices,
+} from "@/db/schema";
+import { findSimilarProducts } from "@/services/products/candidates";
 import { toReviewStatus } from "@/domain/review-status";
 import { getProductSourceSummaries, listProductSources } from "@/services/products/sources";
 import type {
+  CandidateSnapshotChange,
   ProductDetail,
+  ProductReviewHistoryEntry,
   ProductListItem,
   ProductUpdateHistory,
   ProductVendorPrice,
@@ -111,6 +120,7 @@ export async function getProductDetail(productId: string): Promise<ProductDetail
       productId: productMaster.productId,
       productKey: productMaster.productKey,
       productName: productMaster.productName,
+      productMaker: productMaster.productMaker,
       spec: productMaster.spec,
       category: productMaster.category,
       defaultUnitPrice: productMaster.defaultUnitPrice,
@@ -139,6 +149,45 @@ export async function getProductDetail(productId: string): Promise<ProductDetail
   }
 
   const sources = await listProductSources(productId);
+
+  const reviewRows = await db
+    .select({
+      reviewId: productReviewHistory.reviewId,
+      action: productReviewHistory.action,
+      targetProductId: productReviewHistory.targetProductId,
+      note: productReviewHistory.note,
+      reviewedAt: productReviewHistory.reviewedAt,
+      reviewedBy: productReviewHistory.reviewedBy,
+    })
+    .from(productReviewHistory)
+    .where(eq(productReviewHistory.productId, productId))
+    .orderBy(desc(productReviewHistory.reviewedAt))
+    .limit(50);
+  const reviewHistory: ProductReviewHistoryEntry[] = reviewRows.map((row) => ({
+    reviewId: row.reviewId,
+    action: row.action,
+    targetProductId: row.targetProductId ?? null,
+    note: row.note ?? null,
+    reviewedAt: toIsoString(row.reviewedAt) ?? "",
+    reviewedBy: row.reviewedBy,
+  }));
+
+  // 類似候補は保存済みスナップショットではなく、現在の状態から取り直す。
+  const isMerged = toReviewStatus(product.reviewStatus) === "MERGED";
+  const candidates = isMerged
+    ? []
+    : await findSimilarProducts(db, {
+        productId,
+        productName: product.productName,
+        productMaker: product.productMaker ?? null,
+        spec: product.spec ?? null,
+      });
+  const candidateSnapshotChanges = isMerged
+    ? []
+    : await describeSnapshotChanges(
+        productId,
+        new Set(candidates.map((candidate) => candidate.productId)),
+      );
 
   const vendorRows = await db
     .select({
@@ -201,9 +250,70 @@ export async function getProductDetail(productId: string): Promise<ProductDetail
     reviewedAt: toIsoString(product.reviewedAt),
     reviewedBy: product.reviewedBy ?? null,
     mergedInto,
+    productMaker: product.productMaker ?? null,
     sources,
+    reviewHistory,
+    candidates,
+    candidateSnapshotChanges,
     lastUpdatedAt: toIsoString(product.lastUpdatedAt) ?? "",
     vendorPrices: vendorPricesList,
     updateHistory: updateHistoryList,
   };
+}
+
+/**
+ * 照合時点に保存した候補（match_candidates）と現在の状態を比べ、
+ * 現在は候補として出ていないものについて理由を返す。
+ */
+async function describeSnapshotChanges(
+  productId: string,
+  currentCandidateIds: Set<string>,
+): Promise<CandidateSnapshotChange[]> {
+  const db = getDb();
+  const sourceRows = await db
+    .select({ matchCandidates: productDocumentSources.matchCandidates })
+    .from(productDocumentSources)
+    .where(eq(productDocumentSources.productId, productId));
+
+  const snapshot = new Map<string, { productName: string | null; spec: string | null }>();
+  for (const row of sourceRows) {
+    for (const candidate of row.matchCandidates ?? []) {
+      if (!candidate?.productId || candidate.productId === productId) continue;
+      if (currentCandidateIds.has(candidate.productId) || snapshot.has(candidate.productId))
+        continue;
+      snapshot.set(candidate.productId, {
+        productName: candidate.productName ?? null,
+        spec: candidate.spec ?? null,
+      });
+    }
+  }
+  if (snapshot.size === 0) return [];
+
+  const currentRows = await db
+    .select({
+      productId: productMaster.productId,
+      productName: productMaster.productName,
+      spec: productMaster.spec,
+      reviewStatus: productMaster.reviewStatus,
+    })
+    .from(productMaster)
+    .where(inArray(productMaster.productId, Array.from(snapshot.keys())));
+  const currentById = new Map(currentRows.map((row) => [row.productId, row]));
+
+  return Array.from(snapshot.entries()).map(([candidateId, saved]) => {
+    const current = currentById.get(candidateId);
+    let change = "現在は類似候補に該当しません。";
+    if (!current) {
+      change = "商品が見つかりません（削除された可能性があります）。";
+    } else if (current.reviewStatus === "MERGED") {
+      change = "照合後に別の商品へ統合されました。";
+    } else if (current.productName !== saved.productName || (current.spec ?? null) !== saved.spec) {
+      change = "照合後に内容が修正されました。";
+    }
+    return {
+      productId: candidateId,
+      productName: current?.productName ?? saved.productName,
+      change,
+    };
+  });
 }
