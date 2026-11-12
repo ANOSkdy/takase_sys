@@ -24,6 +24,9 @@ export const serverEnvSchema = z
     APP_MAX_PDF_MB: z.coerce.number().int().positive().optional(),
     APP_MAX_PDF_PAGES: z.coerce.number().int().positive().optional(),
 
+    // PDF解析で未照合の明細を仮登録する（"1" / "true" で有効。既定は無効）
+    ENABLE_PROVISIONAL_PRODUCTS: z.string().optional(),
+
     // Preview-only gate (future use)
     MIGRATE_ON_PREVIEW: z.string().optional(),
 

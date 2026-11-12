@@ -38,6 +38,16 @@ function getReasonLabel(reason: string | null) {
       return "既存商品への紐づけ、またはカテゴリ選択付き新規登録が必要です。";
     case "NO_PRODUCT_MATCH":
       return "既存商品に一致しませんでした。";
+    case "PROVISIONAL_PRODUCT_CREATED":
+      return "未確認の商品として仮登録しました。";
+    case "LINKED_TO_UNVERIFIED_PRODUCT":
+      return "未確認の商品に出典を追加しました（商品は未確認のままです）。";
+    case "UNVERIFIED_PRODUCT_PRICE_ADDED":
+      return "未確認の商品に仕入先単価を追加しました（商品・価格とも未確認です）。";
+    case "UNVERIFIED_PRODUCT_PRICE_CONFLICT":
+      return "未確認の商品の登録済み単価と異なります。自動では上書きしていません。";
+    case "MATCHES_MERGED_PRODUCT":
+      return "統合済みの商品に一致しました。統合先（After の mergeTargetProductId）を確認してください。";
     case "LINKED_TO_EXISTING_PRODUCT":
       return "既存商品に紐づけ済みです。";
     default:

@@ -360,6 +360,15 @@ export async function listDocumentDiffItems(
 
 const pendingReviewClassifications = ["NEW_CANDIDATE", "UNMATCHED"] as const;
 
+// 再解析した書類は、成功した最新の解析結果だけを要確認として扱う。
+// 古い解析の新規候補が、仮登録後も未処理として重複表示されるのを防ぐ。
+const latestSucceededParseRunOnly = sql`${documentParseRuns.startedAt} = (
+  select max(pr.started_at)
+  from document_parse_runs pr
+  where pr.document_id = ${documents.documentId}
+    and pr.status = 'SUCCEEDED'
+)`;
+
 function toPendingReviewClassification(
   value: string,
 ): PendingDiffReviewItem["classification"] | null {
@@ -390,6 +399,7 @@ export async function listPendingDiffReviewItems(limit = 10): Promise<PendingDif
       and(
         inArray(documentDiffItems.classification, pendingReviewClassifications),
         eq(documents.isDeleted, false),
+        latestSucceededParseRunOnly,
       ),
     )
     .orderBy(
@@ -433,6 +443,7 @@ export async function getPendingDiffReviewSummary(): Promise<PendingDiffReviewSu
       and(
         inArray(documentDiffItems.classification, pendingReviewClassifications),
         eq(documents.isDeleted, false),
+        latestSucceededParseRunOnly,
       ),
     )
     .groupBy(documentDiffItems.classification);
