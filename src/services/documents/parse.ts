@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
 import type * as schema from "@/db/schema";
@@ -704,8 +704,14 @@ export async function persistParseResult<H extends PgQueryResultHKT>(
     }
 
     // 仮登録: 既存商品に一致せず、条件を満たす明細から未確認の商品を作成する。
-    // 商品キーの一意制約に任せ、競合した場合は既存行を再取得して照合し直す。
+    //
+    // 本番DBの product_master には product_key の一意制約がない（旧来の重複キーもある）。
+    // そのため制約には頼らず、作成の直前に商品テーブルを SHARE ROW EXCLUSIVE でロックし、
+    // ロック取得後にキーを確認し直してから作成する。このロックモードは自身と競合するので、
+    // 並行する解析や手動移行の商品作成は直列化され、同じキーの商品が二重に作られない。
+    // 読み取りは妨げない。ロックはこのトランザクションの終了まで保持される。
     const createdProductIds = new Set<string>();
+    let productTableLocked = false;
     if (provisionalCreateEnabled) {
       for (const context of lineContexts) {
         if (context.resolution !== "NONE") continue;
@@ -723,6 +729,34 @@ export async function persistParseResult<H extends PgQueryResultHKT>(
         const known = productMap.get(context.productKeyCandidate);
         if (known) {
           applyMatch(known, "EXACT");
+          continue;
+        }
+
+        if (!productTableLocked) {
+          await tx.execute(sql`LOCK TABLE product_master IN SHARE ROW EXCLUSIVE MODE`);
+          productTableLocked = true;
+        }
+
+        // ロック取得までの間に、別の処理が同じキーの商品を登録している可能性がある。
+        // 重複キーが既にある場合は、統合済みでない最新の行を優先する。
+        const [existing] = await tx
+          .select(productColumns)
+          .from(productMaster)
+          .where(eq(productMaster.productKey, context.productKeyCandidate))
+          .orderBy(
+            sql`(${productMaster.reviewStatus} = 'MERGED')`,
+            desc(productMaster.lastUpdatedAt),
+            asc(productMaster.productId),
+          )
+          .limit(1);
+        if (existing) {
+          const info = toProductInfo(existing);
+          if (info.reviewStatus === "MERGED") {
+            Object.assign(context, await resolveMergedKey(info));
+          } else {
+            productMap.set(info.productKey, info);
+            applyMatch(info, "EXACT");
+          }
           continue;
         }
 
@@ -744,31 +778,12 @@ export async function persistParseResult<H extends PgQueryResultHKT>(
             // DB既定値（LEGACY）に任せず、未確認であることを明示する。
             reviewStatus: "PROVISIONAL",
           })
-          .onConflictDoNothing({ target: productMaster.productKey })
           .returning(productColumns);
 
-        if (created) {
-          const info = toProductInfo(created);
-          productMap.set(info.productKey, info);
-          createdProductIds.add(info.productId);
-          applyMatch(info, "CREATED");
-          continue;
-        }
-
-        // 並行する解析などが同じキーを先に登録した。作り直さず既存行を使う。
-        const [existing] = await tx
-          .select(productColumns)
-          .from(productMaster)
-          .where(eq(productMaster.productKey, context.productKeyCandidate))
-          .limit(1);
-        if (!existing) continue;
-        const info = toProductInfo(existing);
-        if (info.reviewStatus === "MERGED") {
-          Object.assign(context, await resolveMergedKey(info));
-        } else {
-          productMap.set(info.productKey, info);
-          applyMatch(info, "EXACT");
-        }
+        const info = toProductInfo(created);
+        productMap.set(info.productKey, info);
+        createdProductIds.add(info.productId);
+        applyMatch(info, "CREATED");
       }
     }
 

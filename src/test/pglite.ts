@@ -12,12 +12,18 @@ const SCHEMA_FILES = [
   "db/schema/v3_product_review.sql",
 ];
 
-// 実DBには存在するが、リポジトリのSQLスナップショットに含まれていない列
-// （2026-11-11 に実DBの information_schema と照合）。スナップショットが整備されたら削除する。
+// リポジトリのSQLスナップショットと実DBの差分を、実DBに合わせて補正する
+// （2026-11-11〜12 に実DBの information_schema / pg_indexes と照合）。
+// - 実DBには存在するが、スナップショットにない列
+// - スナップショットには UNIQUE とあるが、実DBには product_key の一意制約がない
+//   （旧来の重複キーも存在する）。アプリは一意制約に頼らずに動く必要がある。
+// スナップショットが整備されたら削除する。
 const UNSNAPSHOTTED_COLUMNS_SQL = `
   ALTER TABLE product_master
     ADD COLUMN IF NOT EXISTS product_maker text,
     ADD COLUMN IF NOT EXISTS product_canonical_key text;
+  ALTER TABLE product_master
+    DROP CONSTRAINT IF EXISTS product_master_product_key_key;
   ALTER TABLE document_line_items
     ADD COLUMN IF NOT EXISTS product_maker text;
 `;
